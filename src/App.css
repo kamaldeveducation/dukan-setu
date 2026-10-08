@@ -1,0 +1,14 @@
+@import './styles/utilities.css';
+@import './styles/auth/login.css';
+@import './styles/auth/customer-registration.css';
+@import './styles/auth/forgot-password.css';
+@import './styles/registration/business-type.css';
+@import './styles/registration/store-registration.css';
+@import './styles/registration/registration-success.css';
+@import './styles/merchant/merchant-layout.css';
+@import './styles/merchant/merchant-dashboard.css';
+@import './styles/merchant/merchant-navigation.css';
+@import './styles/admin/admin-layout.css';
+@import './styles/admin/admin-dashboard.css';
+@import './styles/admin/admin-sidebar.css';
+@import './styles/admin/admin-pages.css';

@@ -1,0 +1,55 @@
+.topbar-divider {
+  width: 1px;
+  height: 28px;
+  margin: 0 16px 0 22px;
+  background: #e1e5dd;
+}
+
+.portal-name {
+  margin-right: auto;
+  color: #65766b;
+  font-size: 13px;
+}
+
+.account-identity {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.account-label {
+  color: #34483e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.account-email {
+  color: #879187;
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .topbar-divider,
+  .portal-name,
+  .account-identity {
+    display: none;
+  }
+}
+
+.admin-layout {
+  display: grid;
+  min-height: calc(100svh - 76px);
+  grid-template-columns: 236px minmax(0, 1fr);
+}
+
+@media (max-width: 850px) {
+  .admin-layout {
+      display: block;
+    }
+}
+
+@media (max-width: 700px) {
+  .admin-layout {
+      display: block;
+    }
+}

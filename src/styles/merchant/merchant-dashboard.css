@@ -1,0 +1,19 @@
+.merchant-pending-panel {
+  max-width: 760px;
+}
+
+.merchant-pending-panel h1 {
+  max-width: 620px;
+  overflow-wrap: anywhere;
+}
+
+.merchant-pending-details {
+  display: grid;
+  width: min(100%, 560px);
+  margin: 0;
+  margin-top: 16px;
+  padding: 4px 15px;
+  border: 1px solid #e0e6dc;
+  background: #fff;
+}
+

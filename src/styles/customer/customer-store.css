@@ -1,0 +1,106 @@
+.store-selector {
+  min-width: 0;
+}
+
+.store-chip-list {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  padding: 2px 1px 5px;
+  scrollbar-width: none;
+}
+
+.store-chip-list::-webkit-scrollbar {
+  display: none;
+}
+
+.store-chip {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid #e0e6dc;
+  border-radius: 999px;
+  color: #657469;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.store-chip.is-selected {
+  border-color: #a9c1a8;
+  color: var(--customer-green);
+  background: #eff5eb;
+}
+
+.store-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b5c0b4;
+}
+
+.store-chip.is-selected .store-chip-dot {
+  background: #64896a;
+}
+
+.current-store-banner {
+  position: relative;
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  gap: 14px;
+  overflow: hidden;
+  padding: 14px 19px;
+  border: 1px solid #dfe8d9;
+  border-radius: 7px;
+  background: linear-gradient(105deg, #f0f5e9, #fffdf3);
+}
+
+.current-store-banner::after {
+  position: absolute;
+  top: -56px;
+  right: 68px;
+  width: 150px;
+  height: 150px;
+  border: 1px solid rgb(84 120 83 / 12%);
+  border-radius: 50%;
+  content: '';
+}
+
+.store-banner-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 23px;
+}
+
+.current-store-banner > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+}
+
+.current-store-banner strong {
+  color: #284638;
+  font-size: 14px;
+}
+
+.current-store-banner small {
+  color: #758276;
+  font-size: 12px;
+}
+
+.store-banner-arrow {
+  position: relative;
+  z-index: 1;
+  margin-left: auto;
+  color: #668269;
+  font-size: 28px;
+  line-height: 1;
+}

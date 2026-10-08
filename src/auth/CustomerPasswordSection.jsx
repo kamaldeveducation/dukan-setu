@@ -1,0 +1,71 @@
+import { useState } from 'react'
+import { hasPasswordProvider } from './authService.js'
+
+export default function CustomerPasswordSection({ currentUser }) {
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  if (hasPasswordProvider(currentUser)) {
+    return (
+      <section className="customer-password-section" aria-live="polite">
+        <div>
+          <h2>Password Login Enabled</h2>
+          <p>You can sign in using your email and password.</p>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="customer-password-section" aria-labelledby="customer-password-title">
+      <div>
+        <h2 id="customer-password-title">Create a password</h2>
+        <p>Set a password so you can also sign in with your email and password.</p>
+      </div>
+      <label className="registration-input" htmlFor="customer-password">
+        Password
+        <span className="password-input-control">
+          <input
+            autoComplete="new-password"
+            id="customer-password"
+            minLength={8}
+            name="password"
+            placeholder="Enter password"
+            required
+            type={showPassword ? 'text' : 'password'}
+          />
+          <button
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            className="password-visibility-button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            type="button"
+          >
+            {showPassword ? 'Hide' : 'Show'}
+          </button>
+        </span>
+      </label>
+      <label className="registration-input" htmlFor="customer-confirm-password">
+        Confirm Password
+        <span className="password-input-control">
+          <input
+            autoComplete="new-password"
+            id="customer-confirm-password"
+            minLength={8}
+            name="confirmPassword"
+            placeholder="Confirm password"
+            required
+            type={showConfirmPassword ? 'text' : 'password'}
+          />
+          <button
+            aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+            className="password-visibility-button"
+            onClick={() => setShowConfirmPassword((visible) => !visible)}
+            type="button"
+          >
+            {showConfirmPassword ? 'Hide' : 'Show'}
+          </button>
+        </span>
+      </label>
+    </section>
+  )
+}

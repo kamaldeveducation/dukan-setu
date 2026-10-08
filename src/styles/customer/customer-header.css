@@ -1,0 +1,123 @@
+.customer-header {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 clamp(22px, 4vw, 54px);
+  border-bottom: 1px solid var(--customer-line);
+  background: rgb(255 255 255 / 96%);
+}
+
+.customer-header-brand {
+  min-width: 0;
+  gap: 11px;
+}
+
+.customer-bag-mark {
+  display: none;
+}
+
+.customer-brand-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.customer-brand-copy strong {
+  color: var(--customer-green-dark);
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.customer-brand-copy small {
+  color: #738076;
+  font-size: 12px;
+}
+
+.customer-menu-toggle {
+  display: none;
+}
+
+.customer-logout {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--customer-line);
+  border-radius: 4px;
+  color: var(--customer-green);
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.customer-logout:hover {
+  background: #f5f7f1;
+}
+
+@media (max-width: 900px) {
+  .customer-header {
+      min-height: 68px;
+      padding: 0 18px;
+    }
+  .customer-menu-toggle {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #d9e1d7;
+      border-radius: 4px;
+      color: var(--customer-green);
+      background: #fff;
+      cursor: pointer;
+      font-size: 18px;
+    }
+  .customer-header-brand {
+      flex: 1 1 auto;
+    }
+  .customer-bag-mark {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 4px;
+      background: #f5edbb;
+      font-size: 19px;
+    }
+  .customer-brand-copy strong {
+      font-size: 17px;
+    }
+  .customer-brand-copy small {
+      overflow: hidden;
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+}
+
+@media (max-width: 540px) {
+  .customer-header {
+      gap: 9px;
+      padding: 0 12px;
+    }
+  .customer-header-brand {
+      gap: 8px;
+    }
+  .customer-brand-copy strong {
+      font-size: 16px;
+    }
+  .customer-brand-copy small {
+      max-width: 195px;
+    }
+  .customer-logout {
+      min-height: 34px;
+      padding: 0 9px;
+      font-size: 11px;
+    }
+}

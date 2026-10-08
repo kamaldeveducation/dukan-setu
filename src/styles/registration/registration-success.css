@@ -1,0 +1,56 @@
+.registration-success {
+  display: grid;
+  justify-items: start;
+  gap: 15px;
+}
+
+.registration-success-mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #477455;
+  font-size: 22px;
+}
+
+.registration-success .eyebrow {
+  margin: 0;
+}
+
+.registration-success h2 {
+  margin: -8px 0 0;
+  color: #1b3029;
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.registration-success > p:not(.eyebrow) {
+  margin: 0;
+  color: #68756e;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.registration-success-details {
+  display: grid;
+  width: 100%;
+  margin: 4px 0;
+  padding: 5px 15px;
+  border: 1px solid #e0e6dc;
+  background: #fafbf8;
+}
+
+.registration-success .submit-button {
+  width: 100%;
+  margin-top: 8px;
+}
+
+@media (max-width: 480px) {
+  .registration-success h2 {
+    font-size: 30px;
+  }
+}

@@ -1,0 +1,45 @@
+.customer-app-shell {
+  --customer-green: #1d493d;
+  --customer-green-dark: #173d34;
+  --customer-yellow: #e7d783;
+  --customer-ink: #263b32;
+  --customer-muted: #78857a;
+  --customer-line: #e3e9df;
+  --customer-surface: #fff;
+  display: grid;
+  min-height: 100svh;
+  grid-template-columns: 248px minmax(0, 1fr);
+  color: var(--customer-ink);
+  background: #f5f7f1;
+}
+
+.customer-sidebar-brand,
+.customer-header-brand {
+  display: flex;
+  align-items: center;
+}
+
+.customer-workspace {
+  min-width: 0;
+}
+
+.customer-main {
+  width: min(100%, 1220px);
+  margin: 0 auto;
+  padding: 28px clamp(22px, 4vw, 54px) 90px;
+}
+
+@media (max-width: 900px) {
+  .customer-app-shell {
+      display: block;
+    }
+  .customer-main {
+      padding: 21px 22px 104px;
+    }
+}
+
+@media (max-width: 540px) {
+  .customer-main {
+      padding: 18px 16px 100px;
+    }
+}

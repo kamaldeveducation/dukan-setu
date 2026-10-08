@@ -1,0 +1,134 @@
+.existing-account-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 22px;
+  padding-bottom: 19px;
+  border-bottom: 1px solid #e8ede5;
+}
+
+.existing-account-heading > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #4d795b;
+  font-size: 18px;
+}
+
+.existing-account-heading h2,
+.existing-account-heading p {
+  margin: 0;
+}
+
+.existing-account-heading h2 {
+  color: #244335;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.existing-account-heading p {
+  margin-top: 4px;
+  color: #78857a;
+  font-size: 12px;
+}
+
+.existing-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.existing-account-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 13px 14px;
+  border: 1px solid #e3e9df;
+  border-radius: 3px;
+  background: #fafbf8;
+}
+
+.existing-account-field span {
+  color: #7a877d;
+  font-size: 11px;
+}
+
+.existing-account-field strong {
+  overflow-wrap: anywhere;
+  color: #283d32;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.customer-registration-form {
+  display: grid;
+  gap: 12px;
+}
+
+.customer-registration-form .submit-button {
+  margin-top: 8px;
+}
+
+.registration-message {
+  display: grid;
+  gap: 14px;
+  color: #56675a;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.registration-message p {
+  margin: 0;
+}
+
+.existing-account-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  color: #748078;
+  font-size: 12px;
+  text-align: center;
+}
+
+.existing-account-prompt button {
+  padding: 0;
+  border: 0;
+  color: #315941;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.existing-account-prompt button:focus-visible {
+  outline: 3px solid #d3be5f;
+  outline-offset: 2px;
+}
+
+.registration-message .existing-role-note,
+.registration-status,
+.registration-error {
+  color: #7a877d;
+  font-size: 13px;
+}
+
+.registration-status {
+  margin: 0;
+}
+
+.registration-error {
+  margin: 0;
+  color: #9b4437;
+}
+
+@media (max-width: 700px) {
+  .existing-account-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+}

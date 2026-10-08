@@ -1,0 +1,241 @@
+.registration-panel-wide {
+  width: min(100% - 36px, 780px);
+}
+
+.registration-review-list {
+  display: grid;
+  margin: 0;
+}
+
+.registration-progress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 28px 0 32px;
+  padding: 0;
+  list-style: none;
+}
+
+.registration-progress li {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+  gap: 8px;
+  color: #8a968c;
+  font-size: 11px;
+}
+
+.registration-progress li > span:first-child {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #d6ddd3;
+  border-radius: 50%;
+  background: #fff;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.registration-progress li.is-current,
+.registration-progress li.is-complete {
+  color: #315941;
+}
+
+.registration-progress li.is-current > span:first-child,
+.registration-progress li.is-complete > span:first-child {
+  border-color: #315941;
+  color: #fff;
+  background: #315941;
+}
+
+.registration-progress-title {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.registration-step-heading {
+  margin-bottom: 22px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e8ede5;
+}
+
+.registration-step-heading > span {
+  color: #718177;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.registration-step-heading h2 {
+  margin: 7px 0 0;
+  color: #1b3029;
+  font-family: var(--display);
+  font-size: 25px;
+  font-weight: 500;
+}
+
+.registration-step-prompt {
+  margin: 0 0 18px;
+  color: #68756e;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.registration-step-fields {
+  min-height: 190px;
+}
+
+.registration-step-fields select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid #d6ddd3;
+  border-radius: 3px;
+  outline: none;
+  color: #24372f;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.registration-step-fields select:focus-visible {
+  border-color: #527267;
+  box-shadow: 0 0 0 3px rgb(82 114 103 / 15%);
+}
+
+.registration-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.registration-form-grid .is-wide {
+  grid-column: 1 / -1;
+}
+
+.registration-form-grid .registration-input input {
+  min-height: 46px;
+}
+
+.registration-selected-summary {
+  margin: 14px 0 0;
+  color: #728077;
+  font-size: 12px;
+}
+
+.registration-step-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid #e8ede5;
+}
+
+.registration-step-actions .submit-button {
+  min-width: 210px;
+  margin-top: 0;
+}
+
+.registration-secondary-button:focus-visible,
+.registration-step-actions .submit-button:focus-visible {
+  outline: 3px solid #d3be5f;
+  outline-offset: 2px;
+}
+
+.registration-secondary-button {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #dce4d8;
+  border-radius: 3px;
+  color: #315941;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.registration-secondary-button:disabled {
+  visibility: hidden;
+}
+
+.registration-auth-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 0 24px;
+  padding: 14px;
+  border: 1px solid #e0e6dc;
+  background: #fafbf8;
+}
+
+.registration-auth-prompt p {
+  margin: 0;
+  color: #68756e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.registration-auth-prompt > div {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.registration-auth-prompt .google-sign-in-button {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.registration-auth-prompt .password-text-button {
+  justify-self: center;
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .registration-progress {
+      gap: 5px;
+    }
+  .registration-progress-title {
+      font-size: 10px;
+    }
+  .registration-auth-prompt {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  .registration-auth-prompt > div {
+      flex: 1 1 auto;
+    }
+  .registration-auth-prompt .google-sign-in-button {
+      width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+  .registration-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .registration-progress li {
+      justify-items: center;
+      text-align: center;
+    }
+  .registration-progress-title {
+      font-size: 9px;
+    }
+  .registration-form-grid .is-wide {
+      grid-column: auto;
+    }
+  .registration-step-fields {
+      min-height: 0;
+    }
+  .registration-step-actions .submit-button {
+      min-width: 0;
+      flex: 1;
+    }
+}

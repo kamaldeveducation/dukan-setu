@@ -1,0 +1,51 @@
+.registration-choice-list {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.business-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.business-type-option {
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid #dce4d8;
+  border-radius: 3px;
+  color: #33483c;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.business-type-option:hover,
+.business-type-option.is-selected {
+  border-color: #75947a;
+  background: #f4f8f1;
+}
+
+.business-type-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #315941;
+}
+
+.business-type-option:focus-within {
+  outline: 3px solid #d3be5f;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .business-type-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
