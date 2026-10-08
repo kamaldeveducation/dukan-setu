@@ -1,6 +1,7 @@
 import AdminLayout from '../admin/AdminLayout.jsx'
 import CustomerRegistration from '../auth/CustomerRegistration.jsx'
 import LoginPage from '../auth/LoginPage.jsx'
+import WorkspaceNotRegistered from '../auth/WorkspaceNotRegistered.jsx'
 import Loading from '../components/Loading.jsx'
 import CustomerLayout from '../customer/layout/CustomerLayout.jsx'
 import MerchantLayout from '../merchant/MerchantLayout.jsx'
@@ -13,14 +14,16 @@ export default function AppRoutes(controller) {
   if (controller.currentPath === '/register/store') {
     return (
       <StoreRegistration
+        authError={controller.customerError}
         currentUser={controller.currentUser}
         handleGoogleSignIn={controller.handleGoogleSignIn}
+        merchantStore={controller.merchantStore}
         navigateTo={controller.navigateTo}
         onRegistrationComplete={controller.handleMerchantRegistration}
-        platformRole={controller.platformRole}
+        platformRole={controller.capabilities?.isSuperAdmin ? 'superAdmin' : controller.capabilities?.isMerchant ? 'merchant' : null}
         signingIn={controller.signingIn}
       />
-      )
+    )
   }
 
 
@@ -44,7 +47,7 @@ export default function AppRoutes(controller) {
     )
   }
 
-  if (controller.currentUser && controller.platformRole === 'superAdmin') {
+  if (controller.currentUser && controller.capabilities?.isSuperAdmin) {
     return (
       <AdminLayout
         activePage={controller.activePage}
@@ -57,11 +60,17 @@ export default function AppRoutes(controller) {
     )
   }
 
-  if (controller.currentUser && controller.platformRole === 'merchant') {
-    return <MerchantLayout handleLogout={controller.handleLogout} store={controller.merchantStore} />
+  if (controller.currentUser && controller.capabilities && controller.loginIntent === 'merchant') {
+    if (!controller.capabilities.isMerchant) {
+      return <WorkspaceNotRegistered capabilities={controller.capabilities} handleLogout={controller.handleLogout} kind="merchant" navigateTo={controller.navigateTo} />
+    }
+    return <MerchantLayout handleLogout={controller.handleLogout} navigateTo={controller.navigateTo} store={controller.merchantStore} />
   }
 
-  if (controller.currentUser && controller.platformRole === 'customer') {
+  if (controller.currentUser && controller.capabilities) {
+    if (!controller.capabilities.isCustomer) {
+      return <WorkspaceNotRegistered capabilities={controller.capabilities} handleLogout={controller.handleLogout} kind="customer" navigateTo={controller.navigateTo} />
+    }
     return <CustomerLayout handleLogout={controller.handleLogout} />
   }
 
@@ -70,10 +79,12 @@ export default function AppRoutes(controller) {
       errorMessage={controller.errorMessage}
       handlePasswordReset={controller.handlePasswordReset}
       handleSubmit={controller.handleSubmit}
+      loginIntent={controller.loginIntent}
       navigateTo={controller.navigateTo}
       passwordResetError={controller.passwordResetError}
       passwordResetMessage={controller.passwordResetMessage}
       passwordResetSaving={controller.passwordResetSaving}
+      setLoginIntent={controller.setLoginIntent}
       signingIn={controller.signingIn}
     />
   )

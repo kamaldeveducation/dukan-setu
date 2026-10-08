@@ -11,12 +11,35 @@ import {
   signOutCurrentUser,
 } from '../auth/authService'
 import { getUserSnapshot, hasAnotherUserWithEmail, updateCustomerAccess } from '../services/userService'
-import { getStoreSnapshot } from '../services/storeService'
+import { getCapabilities } from '../services/capabilityService'
 
 const workspacePaths = {
   superAdmin: '/admin',
   merchant: '/merchant',
   customer: '/customer',
+}
+
+const LOGIN_INTENT_KEY = 'dukanSetuLoginIntent'
+const loginIntents = ['customer', 'merchant']
+
+function readLoginIntent() {
+  const stored = sessionStorage.getItem(LOGIN_INTENT_KEY)
+  return loginIntents.includes(stored) ? stored : 'customer'
+}
+
+function compatibilityRole(capabilities) {
+  if (capabilities.isSuperAdmin) return 'superAdmin'
+  if (capabilities.isMerchant) return 'merchant'
+  if (capabilities.isCustomer) return 'customer'
+  return null
+}
+
+function pickMerchantStore(stores) {
+  for (const status of ['approved', 'pending', 'rejected']) {
+    const store = stores.find((item) => item.status === status)
+    if (store) return store
+  }
+  return stores[0] ?? null
 }
 
 function setAppPath(path, replace = true) {
@@ -29,6 +52,8 @@ export default function useAppController() {
   const [currentUser, setCurrentUser] = useState(null)
   const [platformRole, setPlatformRole] = useState(null)
   const [merchantStore, setMerchantStore] = useState(null)
+  const [capabilities, setCapabilities] = useState(null)
+  const [loginIntent, setLoginIntentState] = useState(readLoginIntent)
   const [currentPath, setCurrentPath] = useState(window.location.pathname)
   const [authChecking, setAuthChecking] = useState(true)
   const [signingIn, setSigningIn] = useState(false)
@@ -45,6 +70,7 @@ export default function useAppController() {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   function navigateTo(path, replace = false) {
+    if (path === '/customer' || path === '/merchant') setLoginIntent(path.slice(1))
     setAppPath(path, replace)
     setCurrentPath(path)
     setCustomerAccount(null)
@@ -66,6 +92,7 @@ export default function useAppController() {
           setCurrentUser(null)
           setPlatformRole(null)
           setMerchantStore(null)
+          setCapabilities(null)
           const isPublicStoreRoute = /^\/store\/[^/]+\/?$/.test(window.location.pathname)
           if (!['/register/customer', '/register/store'].includes(window.location.pathname) && !isPublicStoreRoute) {
             setAppPath('/login')
@@ -79,23 +106,21 @@ export default function useAppController() {
       setAuthChecking(true)
 
       try {
-        const userSnapshot = await getUserSnapshot(firebaseUser.uid)
+        const nextCapabilities = await getCapabilities(firebaseUser.uid)
         if (!active || auth.currentUser?.uid !== firebaseUser.uid) return
 
-        const userData = userSnapshot.exists() ? userSnapshot.data() : null
-        const role = userData?.platformRoles?.dukanSetu
-        const isCustomerRegistration = window.location.pathname === '/register/customer'
+        const pathname = window.location.pathname
         const pendingRegistrationReturn = sessionStorage.getItem('dukanSetuAuthReturn') === '/register/store'
-        const isStoreRegistration = window.location.pathname === '/register/store' || pendingRegistrationReturn
-        let registeredStore = null
+        const isRegistrationRoute = pathname === '/register/customer' || pathname === '/register/store' || pendingRegistrationReturn
+        const isPublicStoreRoute = /^\/store\/[^/]+\/?$/.test(pathname)
 
-        if (role === 'merchant' && userData?.dukanSetuStoreId) {
-          try {
-            const storeSnapshot = await getStoreSnapshot(userData.dukanSetuStoreId)
-            if (storeSnapshot.exists()) registeredStore = storeSnapshot.data()
-          } catch {}
+        const applyCapabilities = () => {
+          setCurrentUser(firebaseUser)
+          setCapabilities(nextCapabilities)
+          setPlatformRole(compatibilityRole(nextCapabilities))
+          setMerchantStore(pickMerchantStore(nextCapabilities.stores))
+          setErrorMessage('')
         }
-        if (!active || auth.currentUser?.uid !== firebaseUser.uid) return
 
         if (pendingRegistrationReturn) {
           sessionStorage.removeItem('dukanSetuAuthReturn')
@@ -103,55 +128,27 @@ export default function useAppController() {
           setCurrentPath('/register/store')
         }
 
-        if (/^\/store\/[^/]+\/?$/.test(window.location.pathname)) {
-          setCurrentUser(firebaseUser)
-          setPlatformRole(Object.hasOwn(workspacePaths, role) ? role : null)
-          setMerchantStore(registeredStore)
-          setErrorMessage('')
+        if (isPublicStoreRoute || isRegistrationRoute) {
+          applyCapabilities()
           return
         }
 
-        if (role === 'customer') {
-          setCurrentUser(firebaseUser)
-          setPlatformRole('customer')
-          setMerchantStore(null)
-          setAppPath('/customer')
-          setCurrentPath('/customer')
+        if (nextCapabilities.isSuperAdmin) {
+          applyCapabilities()
+          setAppPath(workspacePaths.superAdmin)
+          setCurrentPath(workspacePaths.superAdmin)
+          return
+        }
+
+        if (nextCapabilities.isCustomer || nextCapabilities.isMerchant) {
+          const workspacePath = readLoginIntent() === 'merchant' ? workspacePaths.merchant : workspacePaths.customer
+          applyCapabilities()
           setCustomerAccount(null)
-          setErrorMessage('')
-          return
-        }
-
-        if (isCustomerRegistration || isStoreRegistration) {
-          setCurrentUser(firebaseUser)
-          setMerchantStore(registeredStore)
-          setPlatformRole(Object.hasOwn(workspacePaths, role) ? role : null)
-          setErrorMessage('')
-          return
-        }
-
-        if (Object.hasOwn(workspacePaths, role)) {
-          setCurrentUser(firebaseUser)
-          setPlatformRole(role)
-          setMerchantStore(registeredStore)
-          setAppPath(workspacePaths[role])
-          setErrorMessage('')
-        } else if (userData?.role === 'customer') {
-          setCurrentUser(firebaseUser)
-          setPlatformRole(null)
-          setMerchantStore(null)
-          setAppPath('/register/customer')
-          setCurrentPath('/register/customer')
-          setErrorMessage('')
+          setAppPath(workspacePath)
+          setCurrentPath(workspacePath)
         } else {
-          if (isStoreRegistration) {
-            setCurrentUser(firebaseUser)
-            setPlatformRole(null)
-            setMerchantStore(null)
-            setErrorMessage('')
-            return
-          }
           setCurrentUser(null)
+          setCapabilities(null)
           setPlatformRole(null)
           setMerchantStore(null)
           setAppPath('/login')
@@ -167,9 +164,11 @@ export default function useAppController() {
             setCurrentUser(firebaseUser)
             setPlatformRole(null)
             setMerchantStore(null)
+            setCapabilities(null)
           } else {
             setCurrentUser(null)
             setPlatformRole(null)
+            setCapabilities(null)
             setAppPath('/login')
             setCurrentPath('/login')
             setErrorMessage('We could not verify your Dukan Setu access. Please sign in again.')
@@ -186,6 +185,7 @@ export default function useAppController() {
         setCurrentUser(null)
         setPlatformRole(null)
         setMerchantStore(null)
+        setCapabilities(null)
         setAppPath('/login')
         setAuthChecking(false)
         setErrorMessage('We could not verify your Firebase sign-in state. Please refresh and try again.')
@@ -350,10 +350,29 @@ export default function useAppController() {
     setCurrentUser(auth.currentUser)
     setPlatformRole('merchant')
     setMerchantStore(store)
+    setCapabilities((current) => ({
+      isCustomer: current?.isCustomer ?? false,
+      isSuperAdmin: current?.isSuperAdmin ?? false,
+      isMerchant: true,
+      stores: [store, ...(current?.stores ?? []).filter((item) => (item.storeId ?? item.id) !== store.storeId)],
+    }))
+  }
+
+  function markCustomerCapability() {
+    setCapabilities((current) => ({ isMerchant: false, isSuperAdmin: false, stores: [], ...current, isCustomer: true }))
+  }
+
+  function setLoginIntent(intent) {
+    if (!loginIntents.includes(intent)) return
+    sessionStorage.setItem(LOGIN_INTENT_KEY, intent)
+    setLoginIntentState(intent)
   }
 
   async function handleLogout() {
+    sessionStorage.removeItem(LOGIN_INTENT_KEY)
+    setLoginIntentState('customer')
     setCurrentUser(null)
+    setCapabilities(null)
     setPlatformRole(null)
     setAuthChecking(true)
     setErrorMessage('')
@@ -452,6 +471,7 @@ export default function useAppController() {
 
       await updateCustomerAccess(customerAccount.uid, updates)
       setCurrentUser(auth.currentUser)
+      markCustomerCapability()
       setPlatformRole('customer')
       navigateTo('/customer', true)
     } catch (error) {
@@ -461,6 +481,7 @@ export default function useAppController() {
         try {
           await updateCustomerAccess(auth.currentUser.uid, updates)
           setCurrentUser(auth.currentUser)
+          markCustomerCapability()
           setPlatformRole('customer')
           navigateTo('/customer', true)
         } catch {
@@ -521,6 +542,9 @@ export default function useAppController() {
     currentUser,
     platformRole,
     merchantStore,
+    capabilities,
+    loginIntent,
+    setLoginIntent,
     currentPath,
     authChecking,
     signingIn,

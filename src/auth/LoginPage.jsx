@@ -4,10 +4,12 @@ export default function LoginPage({
   errorMessage,
   handlePasswordReset,
   handleSubmit,
+  loginIntent,
   navigateTo,
   passwordResetError,
   passwordResetMessage,
   passwordResetSaving,
+  setLoginIntent,
   signingIn,
 }) {
   return (
@@ -42,6 +44,22 @@ export default function LoginPage({
           {errorMessage && (
             <div className="notice notice-error" role="alert">{errorMessage}</div>
           )}
+
+          <fieldset className="login-intent">
+            <legend>Login As</legend>
+            {[['customer', 'Customer'], ['merchant', 'Merchant']].map(([value, label]) => (
+              <label className={`login-intent-option${loginIntent === value ? ' is-selected' : ''}`} key={value}>
+                <input
+                  checked={loginIntent === value}
+                  name="loginIntent"
+                  onChange={() => setLoginIntent(value)}
+                  type="radio"
+                  value={value}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </fieldset>
 
           <form className="login-form" onSubmit={handleSubmit}>
             <label htmlFor="email">Email</label>
