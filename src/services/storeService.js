@@ -50,7 +50,7 @@ export async function createStoreRegistration(ownerUid, business, owner) {
 	const existingUser = existingUserSnapshot.exists() ? existingUserSnapshot.data() : {}
 	const existingPlatformRole = existingUser.platformRoles?.dukanSetu
 
-	if (existingPlatformRole && existingPlatformRole !== 'merchant') {
+	if (existingPlatformRole && !['customer', 'merchant'].includes(existingPlatformRole)) {
 		throw new Error('This Dukan Setu account already has a different platform role.')
 	}
 	if (existingUser.dukanSetuStoreId) {
@@ -72,11 +72,16 @@ export async function createStoreRegistration(ownerUid, business, owner) {
 	const batch = writeBatch(db)
 
 	batch.set(storeRef, store)
-	batch.set(userRef, {
-		platformRoles: { dukanSetu: 'merchant' },
+	const userUpdates = {
 		dukanSetuStoreId: storeId,
 		dukanSetuMerchantStatus: 'pending',
-	}, { mergeFields: ['platformRoles.dukanSetu', 'dukanSetuStoreId', 'dukanSetuMerchantStatus'] })
+	}
+	const userMergeFields = ['dukanSetuStoreId', 'dukanSetuMerchantStatus']
+	if (!existingPlatformRole) {
+		userUpdates.platformRoles = { dukanSetu: 'merchant' }
+		userMergeFields.push('platformRoles.dukanSetu')
+	}
+	batch.set(userRef, userUpdates, { mergeFields: userMergeFields })
 	await batch.commit()
 
 	return store

@@ -5,6 +5,7 @@ import {
   linkWithCredential,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
+  reload,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -39,6 +40,12 @@ function getCurrentUser() {
   return auth.currentUser
 }
 
+export async function refreshCurrentUser() {
+  const user = getCurrentUser()
+  await reload(user)
+  return getCurrentUser()
+}
+
 async function reauthenticateWithGoogle(user) {
   const result = await reauthenticateWithPopup(user, new GoogleAuthProvider())
   return result.user
@@ -55,7 +62,7 @@ function ensureSameUser(result, expectedUid) {
 }
 
 export async function linkPasswordToCurrentUser(password) {
-  let user = getCurrentUser()
+  let user = await refreshCurrentUser()
   if (!user.email) {
     const error = new Error('The authenticated account has no email address.')
     error.code = 'auth/missing-email'
@@ -69,13 +76,22 @@ export async function linkPasswordToCurrentUser(password) {
 
   const originalUid = user.uid
   const credential = EmailAuthProvider.credential(user.email, password)
+  let result
   try {
-    return ensureSameUser(await linkWithCredential(user, credential), originalUid)
+    result = ensureSameUser(await linkWithCredential(user, credential), originalUid)
   } catch (error) {
     if (error.code !== 'auth/requires-recent-login') throw error
     user = await reauthenticateWithGoogle(user)
-    return ensureSameUser(await linkWithCredential(user, credential), originalUid)
+    result = ensureSameUser(await linkWithCredential(user, credential), originalUid)
   }
+
+  if (!hasPasswordProvider(result.user)) {
+    const error = new Error('We could not confirm your password was saved. Please try again.')
+    error.code = 'auth/link-not-confirmed'
+    throw error
+  }
+
+  return result
 }
 
 export async function changePasswordForCurrentUser(password, currentPassword) {

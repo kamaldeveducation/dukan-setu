@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { auth } from '../firebase'
-import { hasPasswordProvider, linkPasswordToCurrentUser } from '../auth/authService'
+import { hasPasswordProvider, linkPasswordToCurrentUser, refreshCurrentUser } from '../auth/authService'
 import { getBusinessCategories, getBusinessType, getBusinessTypes } from '../services/businessTypeService'
 import { createStoreRegistration, resubmitStoreApplication } from '../services/storeService'
 import BusinessCategoryStep from './BusinessCategoryStep.jsx'
@@ -31,6 +31,7 @@ function errorMessage(error) {
   }
   if (error.code === 'auth/popup-closed-by-user') return 'Google verification was cancelled. Try again when ready.'
   if (error.code === 'auth/network-request-failed') return 'We could not connect. Check your connection and try again.'
+  if (error.code === 'auth/link-not-confirmed') return 'We could not confirm your password was saved. Please try again.'
   if (error.code) return 'We could not complete your registration. Please try again.'
   return error.message || 'We could not submit your registration. Please try again.'
 }
@@ -68,8 +69,26 @@ export default function StoreRegistration({
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordLinked, setPasswordLinked] = useState(false)
+  const [passwordProviderStatus, setPasswordProviderStatus] = useState('checking')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    refreshCurrentUser()
+      .then((user) => {
+        if (active && user.uid === currentUser?.uid) {
+          setPasswordProviderStatus(hasPasswordProvider(user) ? 'linked' : 'unlinked')
+        }
+      })
+      .catch(() => {
+        if (active) setPasswordProviderStatus('error')
+      })
+
+    return () => {
+      active = false
+    }
+  }, [currentUser?.uid])
 
   useEffect(() => {
     if (currentUser && hasExistingApplication) navigateTo('/merchant', true)
@@ -116,7 +135,7 @@ export default function StoreRegistration({
     )
   }
 
-  const needsPassword = !hasPasswordProvider(currentUser) || passwordLinked
+  const needsPassword = passwordProviderStatus !== 'linked' || passwordLinked
   const stepTitles = [
     'Business Type',
     'Business Category',
@@ -168,7 +187,20 @@ export default function StoreRegistration({
       return
     }
 
-    const linkRequired = needsPassword && !passwordLinked
+    let verifiedUser
+    try {
+      verifiedUser = await refreshCurrentUser()
+    } catch {
+      setError('We could not verify your password sign-in. Please try again.')
+      return
+    }
+    if (verifiedUser.uid !== firebaseUser.uid) {
+      setError('We could not verify your account. Please sign in again.')
+      return
+    }
+    const hasPasswordLogin = hasPasswordProvider(verifiedUser)
+    setPasswordProviderStatus(hasPasswordLogin ? 'linked' : 'unlinked')
+    const linkRequired = !hasPasswordLogin && !passwordLinked
     if (linkRequired) {
       const problem = passwordProblem()
       if (problem) {
@@ -185,8 +217,11 @@ export default function StoreRegistration({
           if (result.user.uid !== firebaseUser.uid) throw new Error('We could not verify your account. No new account was created.')
         } catch (linkError) {
           if (linkError.code !== 'auth/provider-already-linked') throw linkError
+          const linkedUser = await refreshCurrentUser()
+          if (linkedUser.uid !== firebaseUser.uid || !hasPasswordProvider(linkedUser)) throw linkError
         }
         setPasswordLinked(true)
+        setPasswordProviderStatus('linked')
       }
 
       const store = rejectedStore

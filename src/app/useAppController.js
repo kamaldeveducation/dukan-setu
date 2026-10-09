@@ -5,6 +5,7 @@ import {
   getEmailSignInMethods,
   hasPasswordProvider,
   linkPasswordToCurrentUser,
+  refreshCurrentUser,
   sendPasswordReset,
   signInWithEmail,
   signInWithGoogle,
@@ -212,13 +213,7 @@ export default function useAppController() {
         if (!active || auth.currentUser?.uid !== firebaseUser.uid) return
 
         const userData = userSnapshot.exists() ? userSnapshot.data() : null
-        if (userData?.platformRoles?.dukanSetu === 'customer') {
-          setCurrentUser(firebaseUser)
-          setPlatformRole('customer')
-          navigateTo('/customer', true)
-          return
-        }
-
+        const existingPlatformRole = userData?.platformRoles?.dukanSetu
         const profileData = userData || {}
         const profile = {
           name: profileData.name || profileData.fullName || profileData.displayName || firebaseUser.displayName || '',
@@ -226,21 +221,31 @@ export default function useAppController() {
           email: profileData.email || firebaseUser.email || '',
           address: profileData.address || '',
         }
-        if (userData?.platformRoles?.dukanSetu && userData.platformRoles.dukanSetu !== 'customer') {
+
+        if (existingPlatformRole === 'superAdmin') {
           setCustomerAccount({
             uid: firebaseUser.uid,
             status: 'ineligible',
-            existingRole: userData.role || userData.platformRoles.dukanSetu,
+            existingRole: 'superAdmin',
             userData,
             profile,
           })
           return
         }
-        if (userData && userData.role !== 'customer' && userData.platformRoles?.dukanSetu !== 'customer') {
+
+        if (existingPlatformRole === 'customer' || userData?.dukanSetuCustomer === true || userData?.role === 'customer') {
+          setCurrentUser(firebaseUser)
+          setPlatformRole('customer')
+          navigateTo('/customer', true)
+          return
+        }
+
+        const hasMerchantAccess = existingPlatformRole === 'merchant' || Boolean(userData?.dukanSetuStoreId)
+        if ((existingPlatformRole && !hasMerchantAccess) || (userData && userData.role !== 'customer' && !hasMerchantAccess)) {
           setCustomerAccount({
             uid: firebaseUser.uid,
             status: 'ineligible',
-            existingRole: userData.role || 'Not assigned',
+            existingRole: userData?.role || existingPlatformRole || 'Not assigned',
             userData,
             profile,
           })
@@ -304,12 +309,12 @@ export default function useAppController() {
         try {
           const methods = await getEmailSignInMethods(email)
           if (methods.includes('google.com') && !methods.includes('password')) {
-            setErrorMessage('Password login is not enabled for this account yet. Please sign in with Google or create a password from your account.')
+            setErrorMessage('Password login is not enabled for this account yet. Sign in with Google, or use "Forgot password?" below to set a new password for this account.')
           } else {
-            setErrorMessage('That email and password combination was not recognized. If this is a Google-only account, sign in with Google or create a password from your account.')
+            setErrorMessage('That email and password combination was not recognized. If you signed up with Google, sign in with Google, or use "Forgot password?" below to set a new password.')
           }
         } catch {
-          setErrorMessage('That email and password combination was not recognized. If this is a Google-only account, sign in with Google or create a password from your account.')
+          setErrorMessage('That email and password combination was not recognized. If you signed up with Google, sign in with Google, or use "Forgot password?" below to set a new password.')
         }
       } else if (error.code === 'auth/too-many-requests') {
         setErrorMessage('Too many attempts. Please wait a moment and try again.')
@@ -402,12 +407,27 @@ export default function useAppController() {
     }
 
     setCustomerError('')
+    let verifiedUser
+    try {
+      verifiedUser = await refreshCurrentUser()
+    } catch {
+      setCustomerError('We could not verify your sign-in providers. Please try again.')
+      return
+    }
+    if (verifiedUser.uid !== customerAccount.uid) {
+      setCustomerError('We could not verify your existing account. No new account was created.')
+      return
+    }
+
     const formData = new FormData(event.currentTarget)
     const password = formData.get('password')?.toString() || ''
     const confirmPassword = formData.get('confirmPassword')?.toString() || ''
-    const needsPassword = !hasPasswordProvider(auth.currentUser)
+    const needsPassword = !hasPasswordProvider(verifiedUser)
     const { userData, profile } = customerAccount
-    const updates = { platformRoles: { dukanSetu: 'customer' } }
+    const updates = { dukanSetuCustomer: true }
+    if (!userData?.platformRoles?.dukanSetu) {
+      updates.platformRoles = { dukanSetu: 'customer' }
+    }
     const hasValue = (...values) => values.some((value) => typeof value === 'string' && value.trim())
 
     if (needsPassword && !password) {
@@ -479,14 +499,18 @@ export default function useAppController() {
         setCustomerError('This email is already linked to another Firebase account. Sign in to that account to continue.')
       } else if (error.code === 'auth/provider-already-linked') {
         try {
+          const linkedUser = await refreshCurrentUser()
+          if (linkedUser.uid !== customerAccount.uid || !hasPasswordProvider(linkedUser)) throw error
           await updateCustomerAccess(auth.currentUser.uid, updates)
-          setCurrentUser(auth.currentUser)
+          setCurrentUser(linkedUser)
           markCustomerCapability()
           setPlatformRole('customer')
           navigateTo('/customer', true)
         } catch {
           setCustomerError('Your password is already enabled, but we could not finish customer access. Please try again.')
         }
+      } else if (error.code === 'auth/link-not-confirmed') {
+        setCustomerError('We could not confirm your password was saved. Please try creating your password again.')
       } else if (error.code === 'auth/weak-password') {
         setCustomerError('Use a password with at least 8 characters.')
       } else if (error.code === 'auth/popup-closed-by-user') {

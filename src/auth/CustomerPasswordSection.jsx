@@ -1,11 +1,37 @@
-import { useState } from 'react'
-import { hasPasswordProvider } from './authService.js'
+import { useEffect, useState } from 'react'
+import { hasPasswordProvider, refreshCurrentUser } from './authService.js'
 
 export default function CustomerPasswordSection({ currentUser }) {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [passwordProviderStatus, setPasswordProviderStatus] = useState('checking')
 
-  if (hasPasswordProvider(currentUser)) {
+  useEffect(() => {
+    let active = true
+    refreshCurrentUser()
+      .then((user) => {
+        if (active && user.uid === currentUser?.uid) {
+          setPasswordProviderStatus(hasPasswordProvider(user) ? 'linked' : 'unlinked')
+        }
+      })
+      .catch(() => {
+        if (active) setPasswordProviderStatus('error')
+      })
+
+    return () => {
+      active = false
+    }
+  }, [currentUser?.uid])
+
+  if (passwordProviderStatus === 'checking') {
+    return <p className="registration-status" aria-live="polite">Checking password sign-in...</p>
+  }
+
+  if (passwordProviderStatus === 'error') {
+    return <p className="registration-error" role="alert">We could not verify password sign-in. Please refresh and try again.</p>
+  }
+
+  if (passwordProviderStatus === 'linked') {
     return (
       <section className="customer-password-section" aria-live="polite">
         <div>

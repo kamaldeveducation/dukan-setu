@@ -22,6 +22,10 @@ export async function hasAnotherUserWithEmail(emailValues, uid) {
 
 export function updateCustomerAccess(uid, updates) {
   const customerRef = doc(db, 'users', uid)
-  const mergeFields = ['platformRoles.dukanSetu', ...Object.keys(updates).filter((field) => field !== 'platformRoles')]
+  const mergeFields = Object.keys(updates).flatMap((field) => (
+    field === 'platformRoles'
+      ? Object.keys(updates.platformRoles).map((role) => `platformRoles.${role}`)
+      : [field]
+  ))
   return setDoc(customerRef, updates, { mergeFields })
 }
