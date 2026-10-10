@@ -1,5 +1,5 @@
 import { getStoreSnapshot, getStoresByOwnerUid } from './storeService'
-import { getUserSnapshot } from './userService'
+import { getUserSnapshotFromServer } from './userService'
 
 export function resolveCapabilities(userData, stores = []) {
   const platformRole = userData?.platformRoles?.dukanSetu
@@ -14,7 +14,7 @@ export function resolveCapabilities(userData, stores = []) {
 }
 
 export async function getCapabilities(uid) {
-  const userSnapshot = await getUserSnapshot(uid)
+  const userSnapshot = await getUserSnapshotFromServer(uid)
   const userData = userSnapshot.exists() ? userSnapshot.data() : null
   let stores = []
 

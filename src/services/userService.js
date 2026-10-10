@@ -1,8 +1,12 @@
-import { collection, doc, getDoc, getDocs, limit, query, setDoc, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocFromServer, getDocs, limit, query, setDoc, where } from 'firebase/firestore'
 import { db } from '../firebase'
 
 export function getUserSnapshot(uid) {
   return getDoc(doc(db, 'users', uid))
+}
+
+export function getUserSnapshotFromServer(uid) {
+  return getDocFromServer(doc(db, 'users', uid))
 }
 
 export function updateMerchantAccess(uid, updates) {

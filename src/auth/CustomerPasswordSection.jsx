@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { hasPasswordProvider, refreshCurrentUser } from './authService.js'
 
-export default function CustomerPasswordSection({ currentUser }) {
+export default function CustomerPasswordSection({ currentUser, onResetPassword, passwordLinkSuccess }) {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [passwordProviderStatus, setPasswordProviderStatus] = useState('checking')
@@ -31,13 +31,27 @@ export default function CustomerPasswordSection({ currentUser }) {
     return <p className="registration-error" role="alert">We could not verify password sign-in. Please refresh and try again.</p>
   }
 
+  if (passwordLinkSuccess) {
+    return (
+      <section className="customer-password-section" aria-live="polite">
+        <div>
+          <h2>Password linked successfully</h2>
+          <p>This account can now sign in with its email and password.</p>
+        </div>
+      </section>
+    )
+  }
+
   if (passwordProviderStatus === 'linked') {
     return (
       <section className="customer-password-section" aria-live="polite">
         <div>
           <h2>Password Login Enabled</h2>
-          <p>You can sign in using your email and password.</p>
+          <p>This Firebase account already has password sign-in enabled. If you need to recover it, return to sign in and use Forgot password.</p>
         </div>
+        <button className="password-text-button" onClick={onResetPassword} type="button">
+          Go to sign in for password recovery
+        </button>
       </section>
     )
   }
@@ -49,14 +63,14 @@ export default function CustomerPasswordSection({ currentUser }) {
         <p>Set a password so you can also sign in with your email and password.</p>
       </div>
       <label className="registration-input" htmlFor="customer-password">
-        Password
+        Create Password
         <span className="password-input-control">
           <input
             autoComplete="new-password"
             id="customer-password"
             minLength={8}
             name="password"
-            placeholder="Enter password"
+            placeholder="Create a password"
             required
             type={showPassword ? 'text' : 'password'}
           />

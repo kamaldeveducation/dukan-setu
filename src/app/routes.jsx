@@ -36,6 +36,7 @@ export default function AppRoutes(controller) {
         customerAccount={controller.customerAccount}
         customerError={controller.customerError}
         customerSaving={controller.customerSaving}
+        handleLogout={controller.handleLogout}
         handleCustomerRegistration={controller.handleCustomerRegistration}
         handleGoogleSignIn={controller.handleGoogleSignIn}
         navigateTo={controller.navigateTo}
@@ -64,7 +65,7 @@ export default function AppRoutes(controller) {
     if (!controller.capabilities.isMerchant) {
       return <WorkspaceNotRegistered capabilities={controller.capabilities} handleLogout={controller.handleLogout} kind="merchant" navigateTo={controller.navigateTo} />
     }
-    return <MerchantLayout handleLogout={controller.handleLogout} navigateTo={controller.navigateTo} store={controller.merchantStore} />
+    return <MerchantLayout currentPath={controller.currentPath} currentUser={controller.currentUser} handleLogout={controller.handleLogout} navigateTo={controller.navigateTo} store={controller.merchantStore} />
   }
 
   if (controller.currentUser && controller.capabilities) {

@@ -64,6 +64,7 @@ export default function useAppController() {
   const [customerSaving, setCustomerSaving] = useState(false)
   const [customerError, setCustomerError] = useState('')
   const customerRegistrationInProgress = useRef(false)
+  const loginSubmissionInProgress = useRef(false)
   const [passwordResetError, setPasswordResetError] = useState('')
   const [passwordResetMessage, setPasswordResetMessage] = useState('')
   const [passwordResetSaving, setPasswordResetSaving] = useState(false)
@@ -114,6 +115,7 @@ export default function useAppController() {
         const pendingRegistrationReturn = sessionStorage.getItem('dukanSetuAuthReturn') === '/register/store'
         const isRegistrationRoute = pathname === '/register/customer' || pathname === '/register/store' || pendingRegistrationReturn
         const isPublicStoreRoute = /^\/store\/[^/]+\/?$/.test(pathname)
+        const selectedIntent = readLoginIntent()
 
         const applyCapabilities = () => {
           setCurrentUser(firebaseUser)
@@ -142,22 +144,19 @@ export default function useAppController() {
         }
 
         if (nextCapabilities.isCustomer || nextCapabilities.isMerchant) {
-          const workspacePath = readLoginIntent() === 'merchant' ? workspacePaths.merchant : workspacePaths.customer
+          const workspacePath = selectedIntent === 'merchant' ? workspacePaths.merchant : workspacePaths.customer
           applyCapabilities()
           setCustomerAccount(null)
           setAppPath(workspacePath)
           setCurrentPath(workspacePath)
         } else {
-          setCurrentUser(null)
-          setCapabilities(null)
+          const workspacePath = selectedIntent === 'merchant' ? workspacePaths.merchant : workspacePaths.customer
+          setCurrentUser(firebaseUser)
+          setCapabilities(nextCapabilities)
           setPlatformRole(null)
           setMerchantStore(null)
-          setAppPath('/login')
-          setCurrentPath('/login')
-          setErrorMessage('Your account is not registered for Dukan Setu yet.')
-          try {
-            await signOutCurrentUser()
-          } catch {}
+          setAppPath(workspacePath)
+          setCurrentPath(workspacePath)
         }
       } catch {
         if (active && auth.currentUser?.uid === firebaseUser.uid) {
@@ -296,14 +295,17 @@ export default function useAppController() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (loginSubmissionInProgress.current) return
+    loginSubmissionInProgress.current = true
     setErrorMessage('')
     setSigningIn(true)
 
     const formData = new FormData(event.currentTarget)
-    const email = formData.get('email').trim()
+    const email = formData.get('email')?.toString().trim() ?? ''
+    const password = formData.get('password')?.toString() ?? ''
 
     try {
-      await signInWithEmail(email, formData.get('password'))
+      await signInWithEmail(email, password)
     } catch (error) {
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
         try {
@@ -320,10 +322,17 @@ export default function useAppController() {
         setErrorMessage('Too many attempts. Please wait a moment and try again.')
       } else if (error.code === 'auth/network-request-failed') {
         setErrorMessage('We could not connect to sign you in. Check your connection and try again.')
+      } else if (error.code === 'auth/invalid-email') {
+        setErrorMessage('Enter a valid email address and try again.')
+      } else if (error.code === 'auth/user-disabled') {
+        setErrorMessage('This account is disabled. Contact support for help signing in.')
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setErrorMessage('Email and password sign-in is not enabled. Contact support for help.')
       } else {
         setErrorMessage('We could not sign you in. Check your connection and try again.')
       }
     } finally {
+      loginSubmissionInProgress.current = false
       setSigningIn(false)
     }
   }
@@ -401,92 +410,103 @@ export default function useAppController() {
       || auth.currentUser.uid !== customerAccount.uid
     ) return
 
-    if (platformRole === 'customer') {
-      navigateTo('/customer', true)
-      return
-    }
-
-    setCustomerError('')
-    let verifiedUser
-    try {
-      verifiedUser = await refreshCurrentUser()
-    } catch {
-      setCustomerError('We could not verify your sign-in providers. Please try again.')
-      return
-    }
-    if (verifiedUser.uid !== customerAccount.uid) {
-      setCustomerError('We could not verify your existing account. No new account was created.')
-      return
-    }
-
     const formData = new FormData(event.currentTarget)
-    const password = formData.get('password')?.toString() || ''
-    const confirmPassword = formData.get('confirmPassword')?.toString() || ''
-    const needsPassword = !hasPasswordProvider(verifiedUser)
-    const { userData, profile } = customerAccount
-    const updates = { dukanSetuCustomer: true }
-    if (!userData?.platformRoles?.dukanSetu) {
-      updates.platformRoles = { dukanSetu: 'customer' }
-    }
-    const hasValue = (...values) => values.some((value) => typeof value === 'string' && value.trim())
-
-    if (needsPassword && !password) {
-      setCustomerError('Please create a password to continue.')
-      return
-    }
-    if (needsPassword && !confirmPassword) {
-      setCustomerError('Please confirm your password.')
-      return
-    }
-    if (needsPassword && password !== confirmPassword) {
-      setCustomerError('Passwords do not match.')
-      return
-    }
-    if (needsPassword && password.length < 8) {
-      setCustomerError('Use a password with at least 8 characters.')
-      return
-    }
-    if (userData?.role !== 'customer') {
-      const missingProfileFields = [
-        ['name', 'full name', profile.name],
-        ['mobile', 'mobile number', profile.mobile],
-        ['address', 'address', profile.address],
-      ]
-      const missingField = missingProfileFields.find(([field, , value]) => (
-        !hasValue(value, formData.get(field)?.toString())
-      ))
-      if (missingField) {
-        setCustomerError(`Please enter your ${missingField[1]} to continue.`)
-        return
-      }
-    }
-
     customerRegistrationInProgress.current = true
     setCustomerSaving(true)
-
-    if (userData?.role !== 'customer') {
-      if (!hasValue(userData?.name, userData?.fullName, userData?.displayName)) {
-        updates.name = profile.name || formData.get('name')?.toString().trim()
-      }
-      if (!hasValue(userData?.mobile, userData?.phone, userData?.phoneNumber)) {
-        updates.mobile = profile.mobile || formData.get('mobile')?.toString().trim()
-      }
-      if (!hasValue(userData?.email)) updates.email = profile.email || auth.currentUser.email
-      if (!hasValue(userData?.address)) updates.address = profile.address || formData.get('address')?.toString().trim()
-
-      for (const field of ['name', 'mobile', 'email', 'address']) {
-        if (!hasValue(updates[field])) delete updates[field]
-      }
-    }
-
+    setCustomerError('')
     try {
-      if (needsPassword) {
-        const result = await linkPasswordToCurrentUser(password)
-        if (result.user.uid !== customerAccount.uid) {
-          setCustomerError('We could not verify your existing account. No new account was created.')
+      if (platformRole === 'customer') {
+        navigateTo('/customer', true)
+        return
+      }
+
+      let verifiedUser
+      try {
+        verifiedUser = await refreshCurrentUser()
+      } catch {
+        setCustomerError('We could not verify your sign-in providers. Please try again.')
+        return
+      }
+      if (verifiedUser.uid !== customerAccount.uid) {
+        setCustomerError('We could not verify your existing account. No new account was created.')
+        return
+      }
+
+      const password = formData.get('password')?.toString() || ''
+      const confirmPassword = formData.get('confirmPassword')?.toString() || ''
+      const needsPassword = !hasPasswordProvider(verifiedUser)
+      const { userData, profile } = customerAccount
+      const updates = { dukanSetuCustomer: true }
+      if (!userData?.platformRoles?.dukanSetu) {
+        updates.platformRoles = { dukanSetu: 'customer' }
+      }
+      const hasValue = (...values) => values.some((value) => typeof value === 'string' && value.trim())
+
+      if (needsPassword && !password) {
+        setCustomerError('Please create a password to continue.')
+        return
+      }
+      if (needsPassword && !confirmPassword) {
+        setCustomerError('Please confirm your password.')
+        return
+      }
+      if (needsPassword && password.length < 8) {
+        setCustomerError('Use a password with at least 8 characters.')
+        return
+      }
+      if (needsPassword && password !== confirmPassword) {
+        setCustomerError('Passwords do not match.')
+        return
+      }
+      if (userData?.role !== 'customer') {
+        const missingProfileFields = [
+          ['name', 'full name', profile.name],
+          ['mobile', 'mobile number', profile.mobile],
+          ['address', 'address', profile.address],
+        ]
+        const missingField = missingProfileFields.find(([field, , value]) => (
+          !hasValue(value, formData.get(field)?.toString())
+        ))
+        if (missingField) {
+          setCustomerError(`Please enter your ${missingField[1]} to continue.`)
           return
         }
-        setCurrentUser(result.user)
+      }
+
+      if (userData?.role !== 'customer') {
+        if (!hasValue(userData?.name, userData?.fullName, userData?.displayName)) {
+          updates.name = profile.name || formData.get('name')?.toString().trim()
+        }
+        if (!hasValue(userData?.mobile, userData?.phone, userData?.phoneNumber)) {
+          updates.mobile = profile.mobile || formData.get('mobile')?.toString().trim()
+        }
+        if (!hasValue(userData?.email)) updates.email = profile.email || auth.currentUser.email
+        if (!hasValue(userData?.address)) updates.address = profile.address || formData.get('address')?.toString().trim()
+
+        for (const field of ['name', 'mobile', 'email', 'address']) {
+          if (!hasValue(updates[field])) delete updates[field]
+        }
+      }
+
+      if (needsPassword) {
+        try {
+          const result = await linkPasswordToCurrentUser(password)
+          if (result.user.uid !== customerAccount.uid || !hasPasswordProvider(result.user)) {
+            setCustomerError('We could not verify your existing account. No new account was created.')
+            return
+          }
+          verifiedUser = result.user
+        } catch (error) {
+          if (error.code !== 'auth/provider-already-linked') throw error
+          const linkedUser = await refreshCurrentUser()
+          if (linkedUser.uid !== customerAccount.uid || !hasPasswordProvider(linkedUser)) throw error
+          verifiedUser = linkedUser
+        }
+        setCurrentUser(verifiedUser)
+        setCustomerAccount((current) => current?.uid === customerAccount.uid
+          ? { ...current, passwordLinked: true }
+          : current)
+        return
       }
 
       await updateCustomerAccess(customerAccount.uid, updates)
@@ -497,28 +517,20 @@ export default function useAppController() {
     } catch (error) {
       if (error.code === 'auth/credential-already-in-use' || error.code === 'auth/email-already-in-use') {
         setCustomerError('This email is already linked to another Firebase account. Sign in to that account to continue.')
-      } else if (error.code === 'auth/provider-already-linked') {
-        try {
-          const linkedUser = await refreshCurrentUser()
-          if (linkedUser.uid !== customerAccount.uid || !hasPasswordProvider(linkedUser)) throw error
-          await updateCustomerAccess(auth.currentUser.uid, updates)
-          setCurrentUser(linkedUser)
-          markCustomerCapability()
-          setPlatformRole('customer')
-          navigateTo('/customer', true)
-        } catch {
-          setCustomerError('Your password is already enabled, but we could not finish customer access. Please try again.')
-        }
       } else if (error.code === 'auth/link-not-confirmed') {
         setCustomerError('We could not confirm your password was saved. Please try creating your password again.')
       } else if (error.code === 'auth/weak-password') {
         setCustomerError('Use a password with at least 8 characters.')
+      } else if (error.code === 'auth/requires-recent-login') {
+        setCustomerError('For your security, sign in with this Google account again, then retry password setup.')
       } else if (error.code === 'auth/popup-closed-by-user') {
         setCustomerError('Google verification was cancelled. Try again when ready.')
       } else if (error.code === 'auth/network-request-failed') {
         setCustomerError('We could not connect to set up your account. Check your connection and try again.')
       } else if (error.code === 'auth/missing-email') {
         setCustomerError('This Google account does not have an email address available for password sign-in.')
+      } else if (error.code === 'auth/unverified-email') {
+        setCustomerError('Verify this account email with Google before enabling password sign-in.')
       } else {
         setCustomerError('We could not set up your account. Please try again.')
       }

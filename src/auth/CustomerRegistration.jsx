@@ -6,6 +6,7 @@ export default function CustomerRegistration({
   customerAccount,
   customerError,
   customerSaving,
+  handleLogout,
   handleCustomerRegistration,
   handleGoogleSignIn,
   navigateTo,
@@ -113,7 +114,11 @@ export default function CustomerRegistration({
                 </label>
               ))}
 
-              <CustomerPasswordSection currentUser={currentUser} />
+              <CustomerPasswordSection
+                currentUser={currentUser}
+                onResetPassword={handleLogout}
+                passwordLinkSuccess={customerAccountForView.passwordLinked}
+              />
               {customerError && <p className="registration-error" role="alert">{customerError}</p>}
               <button className="submit-button" type="submit" disabled={customerSaving}>
                 {customerSaving ? 'Setting up your account...' : 'Continue to Dukan Setu'}

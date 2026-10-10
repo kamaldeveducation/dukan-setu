@@ -1,0 +1,153 @@
+.store-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0 16px;
+}
+
+.store-summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid #e0e5dc;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.store-summary span { color: #52705b; font-size: 12px; }
+.store-summary strong { color: #264235; font-size: 24px; }
+
+.store-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.store-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.store-tabs button {
+  padding: 7px 12px;
+  border: 1px solid #d9e1d4;
+  border-radius: 3px;
+  color: #315941;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.store-tabs button.active { color: #fff; border-color: #264235; background: #264235; }
+
+.store-search {
+  min-width: 260px;
+  padding: 8px 12px;
+  border: 1px solid #d9e1d4;
+  border-radius: 3px;
+}
+
+.store-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #e0e5dc;
+  background: #fff;
+  font-size: 13px;
+}
+
+.store-table th,
+.store-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #edf0ea;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.store-table th { color: #52705b; background: #f6f9f4; font-size: 12px; }
+
+.store-cards { display: none; margin: 0; padding: 0; list-style: none; }
+
+.store-cards li {
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1px solid #e0e5dc;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.store-cards p { margin: 4px 0; font-size: 13px; }
+.store-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.store-status {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: #eee;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.store-status-pending { color: #8a6a00; background: #fbf3cf; }
+.store-status-approved { color: #1f6b3a; background: #dff2e5; }
+.store-status-rejected { color: #9b2c2c; background: #f9e0e0; }
+
+.store-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.store-table .store-actions { margin-top: 0; }
+
+.store-btn {
+  padding: 6px 10px;
+  border: 1px solid #d9e1d4;
+  border-radius: 3px;
+  color: #315941;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.store-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+.store-btn-approve { color: #fff; border-color: #2f6b49; background: #2f6b49; }
+.store-btn-reject { color: #9b2c2c; border-color: #e0b4b4; }
+
+.store-state { padding: 28px; border: 1px dashed #d9e1d4; text-align: center; color: #52705b; }
+.store-state-error { color: #9b2c2c; }
+
+.store-feedback { margin: 0 0 12px; padding: 10px 12px; border-radius: 3px; font-size: 13px; }
+.store-feedback-success { color: #1f6b3a; background: #dff2e5; }
+.store-feedback-error { color: #9b2c2c; background: #f9e0e0; }
+
+.store-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(20 35 28 / 45%);
+}
+
+.store-modal {
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.store-modal h2 { margin: 0 0 8px; }
+.store-modal label { display: block; margin-top: 12px; font-size: 13px; }
+.store-modal textarea { width: 100%; margin: 6px 0; padding: 8px; border: 1px solid #d9e1d4; border-radius: 3px; font: inherit; }
+.store-modal dl { margin: 14px 0; }
+.store-detail-row { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid #edf0ea; font-size: 13px; }
+.store-detail-row dt { flex: 0 0 120px; color: #52705b; }
+.store-detail-row dd { margin: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 860px) {
+  .store-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .store-table { display: none; }
+  .store-cards { display: block; }
+  .store-search { width: 100%; min-width: 0; }
+}

@@ -8,7 +8,9 @@
 @import './styles/merchant/merchant-layout.css';
 @import './styles/merchant/merchant-dashboard.css';
 @import './styles/merchant/merchant-navigation.css';
+@import './styles/merchant/merchant-panel.css';
 @import './styles/admin/admin-layout.css';
 @import './styles/admin/admin-dashboard.css';
 @import './styles/admin/admin-sidebar.css';
 @import './styles/admin/admin-pages.css';
+@import './styles/admin/admin-stores.css';

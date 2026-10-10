@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, where, writeBatch } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 import { getBusinessType } from './businessTypeService'
 
@@ -87,6 +87,45 @@ export async function createStoreRegistration(ownerUid, business, owner) {
 	return store
 }
 
-const storeService = { createStoreRegistration, getStoreSnapshot, getStoresByOwnerUid, resubmitStoreApplication }
+export function subscribeToAllStores(onData, onError) {
+	return onSnapshot(
+		collection(db, 'stores'),
+		(snapshot) => onData(snapshot.docs.map((storeDoc) => ({ ...storeDoc.data(), id: storeDoc.id }))),
+		onError,
+	)
+}
+
+export async function getUserProfile(uid) {
+	const snapshot = await getDoc(doc(db, 'users', uid))
+	return snapshot.exists() ? snapshot.data() : null
+}
+
+// Only the store `status` field is written; no rejection-reason field exists in the data model.
+export async function setStoreApplicationStatus(storeId, nextStatus) {
+	if (!['approved', 'rejected'].includes(nextStatus)) {
+		throw new Error('Unsupported status.')
+	}
+	const storeRef = doc(db, 'stores', storeId)
+	await runTransaction(db, async (transaction) => {
+		const snapshot = await transaction.get(storeRef)
+		if (!snapshot.exists()) throw new Error('This store no longer exists.')
+		const current = snapshot.data().status
+		if (current === nextStatus) throw new Error(`This store is already ${nextStatus}.`)
+		if (nextStatus === 'rejected' && current !== 'pending') {
+			throw new Error('Only pending applications can be rejected.')
+		}
+		transaction.update(storeRef, { status: nextStatus })
+	})
+}
+
+const storeService = {
+	createStoreRegistration,
+	getStoreSnapshot,
+	getStoresByOwnerUid,
+	getUserProfile,
+	resubmitStoreApplication,
+	setStoreApplicationStatus,
+	subscribeToAllStores,
+}
 
 export default storeService

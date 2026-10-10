@@ -214,6 +214,34 @@
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
+.password-input-wrap {
+  position: relative;
+}
+
+.password-input-wrap input {
+  padding-right: 64px;
+}
+
+.password-visibility-button {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  padding: 4px 0;
+  transform: translateY(-50%);
+  border: 0;
+  color: #527267;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.password-visibility-button:focus-visible {
+  outline: 2px solid #527267;
+  outline-offset: 2px;
+}
+
 .login-form input::placeholder {
   color: #9ca69e;
 }

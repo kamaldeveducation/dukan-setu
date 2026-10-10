@@ -68,6 +68,11 @@ export async function linkPasswordToCurrentUser(password) {
     error.code = 'auth/missing-email'
     throw error
   }
+  if (!user.emailVerified) {
+    const error = new Error('The authenticated account email must be verified before password sign-in can be enabled.')
+    error.code = 'auth/unverified-email'
+    throw error
+  }
   if (hasPasswordProvider(user)) {
     const error = new Error('Password sign-in is already enabled.')
     error.code = 'auth/provider-already-linked'

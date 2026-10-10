@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import ForgotPassword from './ForgotPassword.jsx'
 
 export default function LoginPage({
@@ -12,6 +13,8 @@ export default function LoginPage({
   setLoginIntent,
   signingIn,
 }) {
+  const [showPassword, setShowPassword] = useState(false)
+
   return (
     <main className="login-layout">
       <section className="login-story" aria-label="Dukan Setu">
@@ -73,14 +76,39 @@ export default function LoginPage({
             />
 
             <label htmlFor="password">Password</label>
-            <input
-              autoComplete="current-password"
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Enter your password"
-              required
-            />
+            <div className="password-input-wrap">
+              <input
+                autoComplete="current-password"
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+                className="password-visibility-button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                type="button"
+              >
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  {showPassword ? (
+                    <>
+                      <path d="M3 3l18 18" />
+                      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                      <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.5 9 7-.2 1.1-1.1 2.4-2.4 3.6" />
+                      <path d="M6.2 6.2C4.4 7.4 3.3 9 3 12c.3 2.5 4 7 9 7 1.1 0 2.1-.2 3-.6" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </>
+                  )}
+                </svg>
+              </button>
+            </div>
 
             <button className="submit-button" type="submit" disabled={signingIn}>
               {signingIn ? 'Signing in...' : 'Sign in'}
