@@ -1,4 +1,4 @@
-export default function CustomerHeader({ handleLogout, menuOpen, onMenuToggle }) {
+export default function CustomerHeader({ menuOpen, onMenuToggle }) {
   return (
     <header className="customer-header">
       <button
@@ -18,7 +18,6 @@ export default function CustomerHeader({ handleLogout, menuOpen, onMenuToggle })
           <small>Global Customer · Multi-Store Shopping</small>
         </span>
       </div>
-      <button className="customer-logout" type="button" onClick={handleLogout}>Log out</button>
     </header>
   )
 }

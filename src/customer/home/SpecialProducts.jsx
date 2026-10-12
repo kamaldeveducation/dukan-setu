@@ -21,14 +21,7 @@ const previewProducts = [
 
 export default function SpecialProducts() {
   return (
-    <section className="special-products-section" aria-labelledby="special-products-title">
-      <div className="customer-section-heading">
-        <div>
-          <p className="customer-eyebrow">HANDPICKED FOR YOU</p>
-          <h2 id="special-products-title"><span aria-hidden="true">⭐</span> आज के Special Products</h2>
-        </div>
-        <span className="customer-section-note">Mukesh Kirana</span>
-      </div>
+    <section className="product-preview-section" aria-label="Demo products">
       <div className="product-preview-grid">
         {previewProducts.map((product) => <ProductPreviewCard key={product.name} product={product} />)}
       </div>

@@ -8,8 +8,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 0 clamp(22px, 4vw, 54px);
-  border-bottom: 1px solid var(--customer-line);
-  background: rgb(255 255 255 / 96%);
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+  background: #064e3b;
 }
 
 .customer-header-brand {
@@ -27,14 +27,14 @@
 }
 
 .customer-brand-copy strong {
-  color: var(--customer-green-dark);
+  color: #fff;
   font-family: var(--display);
   font-size: 16px;
   font-weight: 600;
 }
 
 .customer-brand-copy small {
-  color: #738076;
+  color: rgb(255 255 255 / 82%);
   font-size: 12px;
 }
 

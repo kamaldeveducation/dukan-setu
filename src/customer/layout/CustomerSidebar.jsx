@@ -1,6 +1,6 @@
 import { customerNavigation } from './navigation.js'
 
-export default function CustomerSidebar({ menuOpen, onNavigate }) {
+export default function CustomerSidebar({ menuOpen, onNavigate, handleLogout }) {
   return (
     <aside className={`customer-sidebar${menuOpen ? ' is-open' : ''}`} id="customer-sidebar" aria-label="Customer navigation">
       <div className="customer-sidebar-brand">
@@ -21,6 +21,10 @@ export default function CustomerSidebar({ menuOpen, onNavigate }) {
             <span>{label}</span>
           </button>
         ))}
+        <button className="customer-sidebar-item" onClick={handleLogout} type="button">
+          <span className="customer-nav-icon" aria-hidden="true">↪</span>
+          <span>Log out</span>
+        </button>
       </nav>
       <div className="customer-sidebar-note">
         <span aria-hidden="true">✳</span>

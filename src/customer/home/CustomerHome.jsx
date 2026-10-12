@@ -9,10 +9,14 @@ export default function CustomerHome() {
       <StoreSelector />
       <CustomerSearchBar />
 
-      <section className="current-store-banner" aria-label="Current store">
-        <span className="store-banner-icon" aria-hidden="true">🏪</span>
-        <span><strong>Mukesh Kirana</strong><small>Retail Price</small></span>
-        <span className="store-banner-arrow" aria-hidden="true">›</span>
+      <section className="customer-offer-banner" aria-labelledby="customer-offer-title">
+        <div className="customer-offer-copy">
+          <span className="customer-offer-eyebrow">TODAY'S OFFER</span>
+          <h2 id="customer-offer-title">आज की खास बचत!</h2>
+          <p>चुनिंदा प्रोडक्ट्स पर शानदार ऑफर</p>
+          <button type="button">अभी देखें →</button>
+        </div>
+        <span className="customer-offer-illustration" aria-hidden="true">🧺</span>
       </section>
 
       <CategorySection />

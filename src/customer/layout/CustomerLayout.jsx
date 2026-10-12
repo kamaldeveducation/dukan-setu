@@ -18,10 +18,13 @@ export default function CustomerLayout({ handleLogout }) {
           type="button"
         />
       )}
-      <CustomerSidebar menuOpen={menuOpen} onNavigate={() => setMenuOpen(false)} />
+      <CustomerSidebar
+        handleLogout={handleLogout}
+        menuOpen={menuOpen}
+        onNavigate={() => setMenuOpen(false)}
+      />
       <div className="customer-workspace">
         <CustomerHeader
-          handleLogout={handleLogout}
           menuOpen={menuOpen}
           onMenuToggle={() => setMenuOpen((open) => !open)}
         />

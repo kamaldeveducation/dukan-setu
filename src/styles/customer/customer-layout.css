@@ -10,7 +10,7 @@
   min-height: 100svh;
   grid-template-columns: 248px minmax(0, 1fr);
   color: var(--customer-ink);
-  background: #f5f7f1;
+  background: #f7f8f5;
 }
 
 .customer-sidebar-brand,

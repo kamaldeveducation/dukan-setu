@@ -1,6 +1,6 @@
 .customer-home {
   display: grid;
-  gap: 24px;
+  gap: 20px;
 }
 
 .customer-search {
@@ -51,8 +51,74 @@
   font-weight: 650;
 }
 
+.customer-offer-banner {
+  display: flex;
+  min-height: 164px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  overflow: hidden;
+  padding: 21px 26px;
+  border: 1px solid #cfe3d2;
+  border-radius: 12px;
+  background: #e8f4e9;
+}
+
+.customer-offer-copy {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.customer-offer-eyebrow {
+  color: #557b5b;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.customer-offer-banner h2 {
+  margin: 0;
+  color: #173d34;
+  font-family: var(--display);
+  font-size: 23px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.customer-offer-banner p {
+  margin: 0;
+  color: #587260;
+  font-size: 13px;
+}
+
+.customer-offer-banner button {
+  min-height: 36px;
+  margin-top: 5px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 5px;
+  color: #fff;
+  background: #1d493d;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.customer-offer-illustration {
+  display: grid;
+  width: 96px;
+  height: 96px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(29 73 61 / 9%);
+  border-radius: 50%;
+  background: #d8ebda;
+  font-size: 48px;
+}
+
 .category-section,
-.special-products-section {
+.product-preview-section {
   display: grid;
   gap: 16px;
 }
@@ -98,20 +164,23 @@
 .category-item {
   display: grid;
   justify-items: center;
-  gap: 9px;
+  gap: 7px;
+  padding: 10px 5px;
+  border: 1px solid #e7ebe3;
+  border-radius: 7px;
   color: #526257;
+  background: #fff;
   font-size: 12px;
   font-weight: 600;
 }
 
 .category-icon {
   display: grid;
-  width: 100%;
-  min-height: 78px;
+  width: 40px;
+  height: 40px;
   place-items: center;
-  border: 1px solid #e8eae0;
-  border-radius: 7px;
-  font-size: 29px;
+  border-radius: 50%;
+  font-size: 26px;
 }
 
 .tone-all {
@@ -130,20 +199,10 @@
   background: #f8e9df;
 }
 
-.special-products-section {
-  padding-top: 5px;
-}
-
-.special-products-section h2 {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
 .product-preview-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .product-preview-card {
@@ -240,6 +299,96 @@
   line-height: 1.45;
 }
 
+.product-quantity-demo {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.product-quantity-stepper,
+.product-suggested-quantities,
+.product-custom-quantity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.product-quantity-stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+}
+
+.product-quantity-stepper button,
+.product-suggested-quantities button,
+.product-custom-quantity button {
+  min-width: 0;
+  border: 1px solid #dfe6dc;
+  border-radius: 4px;
+  color: #315644;
+  background: #f8faf6;
+  font: inherit;
+  font-size: 10px;
+}
+
+.product-quantity-stepper button {
+  display: grid;
+  width: 100%;
+  height: 23px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.product-quantity-stepper button:first-child {
+  background: #b8553f;
+}
+
+.product-quantity-stepper button:last-child {
+  background: #1d493d;
+}
+
+.product-quantity-stepper output {
+  color: #385444;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.product-suggested-quantities button {
+  flex: 1 1 0;
+  padding: 5px 2px;
+  white-space: nowrap;
+}
+
+.product-custom-quantity input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid #dfe6dc;
+  border-radius: 4px;
+  color: var(--customer-ink);
+  background: #fff;
+  font: inherit;
+  font-size: 10px;
+}
+
+.product-custom-quantity button {
+  height: 28px;
+  flex: 0 0 auto;
+  padding: 0 7px;
+  color: #fff;
+  border-color: #1d493d;
+  background: #1d493d;
+}
+
 @media (max-width: 900px) {
   .customer-home {
       gap: 20px;
@@ -257,12 +406,30 @@
   .customer-search button {
       padding: 0 12px;
     }
+  .customer-offer-banner {
+      min-height: 142px;
+      padding: 17px 19px;
+    }
+  .customer-offer-banner h2 {
+      font-size: 21px;
+    }
+  .customer-offer-illustration {
+      width: 82px;
+      height: 82px;
+      font-size: 42px;
+    }
   .category-grid {
       gap: 8px;
     }
   .category-icon {
-      min-height: 68px;
-      font-size: 25px;
+      width: 36px;
+      height: 36px;
+      font-size: 24px;
+    }
+  .category-item {
+      gap: 6px;
+      padding: 8px 3px;
+      font-size: 10px;
     }
   .customer-section-heading h2 {
       font-size: 21px;
@@ -271,21 +438,16 @@
       font-size: 11px;
     }
   .product-preview-grid {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 12px;
-    }
-  .product-preview-card {
-      display: grid;
-      grid-template-columns: 126px minmax(0, 1fr);
-      min-height: 128px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
   .product-preview-art {
-      min-height: 128px;
+      min-height: 112px;
     }
   .product-illustration {
-      width: 62px;
-      height: 62px;
-      font-size: 34px;
+      width: 56px;
+      height: 56px;
+      font-size: 31px;
     }
   .product-art-caption {
       display: none;
@@ -302,14 +464,35 @@
       font-size: 21px;
     }
   .product-preview-copy {
-      align-self: center;
-      padding: 12px;
+      padding: 9px;
     }
   .product-preview-copy h3 {
-      font-size: 13px;
+      margin-top: 5px;
+      font-size: 12px;
       line-height: 1.35;
     }
   .product-preview-copy p {
-      font-size: 11px;
+      font-size: 10px;
+    }
+  .product-category-label {
+      font-size: 7px;
+    }
+  .product-quantity-demo {
+      gap: 5px;
+      margin-top: 8px;
+    }
+  .product-quantity-stepper button {
+      height: 22px;
+      font-size: 16px;
+    }
+  .product-quantity-stepper output {
+      font-size: 10px;
+    }
+  .product-suggested-quantities button {
+      padding: 5px 1px;
+      font-size: 9px;
+    }
+  .product-custom-quantity button {
+      padding: 0 5px;
     }
 }
