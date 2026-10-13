@@ -5,6 +5,37 @@
   border: 0;
 }
 
+.registration-state {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed #d9e1d4;
+  color: #52705b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.registration-state-error {
+  border-style: solid;
+  border-color: #e5b9b4;
+  color: #8f3730;
+  background: #fff8f6;
+}
+
+.registration-state-error p { margin: 0; }
+
+.registration-retry-button {
+  margin-top: 9px;
+  padding: 0;
+  border: 0;
+  color: #315941;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .business-type-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

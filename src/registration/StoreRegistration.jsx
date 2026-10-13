@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { auth } from '../firebase'
 import { hasPasswordProvider, linkPasswordToCurrentUser, refreshCurrentUser } from '../auth/authService'
-import { getBusinessCategories, getBusinessType, getBusinessTypes } from '../services/businessTypeService'
+import { getActiveBusinessType, getBusinessCategories, listActiveBusinessTypes } from '../services/businessTypeService'
 import { createStoreRegistration, resubmitStoreApplication } from '../services/storeService'
 import BusinessCategoryStep from './BusinessCategoryStep.jsx'
 import BusinessInformationStep from './BusinessInformationStep.jsx'
@@ -32,6 +32,7 @@ function errorMessage(error) {
   if (error.code === 'auth/popup-closed-by-user') return 'Google verification was cancelled. Try again when ready.'
   if (error.code === 'auth/network-request-failed') return 'We could not connect. Check your connection and try again.'
   if (error.code === 'auth/link-not-confirmed') return 'We could not confirm your password was saved. Please try again.'
+  if (error.code === 'business-type/not-active') return 'That Business Type is no longer available. Choose an active type and try again.'
   if (error.code) return 'We could not complete your registration. Please try again.'
   return error.message || 'We could not submit your registration. Please try again.'
 }
@@ -72,6 +73,29 @@ export default function StoreRegistration({
   const [passwordProviderStatus, setPasswordProviderStatus] = useState('checking')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [businessTypes, setBusinessTypes] = useState([])
+  const [businessTypesLoading, setBusinessTypesLoading] = useState(true)
+  const [businessTypesError, setBusinessTypesError] = useState('')
+  const [businessTypesReload, setBusinessTypesReload] = useState(0)
+  const [validatingBusinessType, setValidatingBusinessType] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    listActiveBusinessTypes()
+      .then((records) => {
+        if (!active) return
+        setBusinessTypes(records)
+        setBusinessTypesLoading(false)
+      })
+      .catch((loadError) => {
+        if (!active) return
+        setBusinessTypesError(loadError.message || 'Check your connection and retry.')
+        setBusinessTypesLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [businessTypesReload])
 
   useEffect(() => {
     let active = true
@@ -108,7 +132,7 @@ export default function StoreRegistration({
             disabled={signingIn}
             onClick={async () => {
               setError('')
-              if (!(await handleGoogleSignIn())) setError('We could not sign you in with Google. Please try again.')
+              await handleGoogleSignIn()
             }}
             style={{ width: '100%' }}
             type="button"
@@ -145,9 +169,8 @@ export default function StoreRegistration({
     ...(needsPassword ? ['Create Password'] : []),
   ]
   const lastStep = stepTitles.length - 1
-  const businessTypes = getBusinessTypes()
-  const selectedType = getBusinessType(business.businessType)
-  const categories = getBusinessCategories(business.businessType)
+  const selectedType = businessTypes.find((type) => [type.id, type.code, type.name].includes(business.businessType)) ?? null
+  const categories = getBusinessCategories(selectedType?.id ?? business.businessType)
   const ownerValues = {
     ownerName: owner.ownerName ?? currentUser.displayName ?? '',
     ownerMobile: owner.ownerMobile ?? currentUser.phoneNumber ?? '',
@@ -175,7 +198,23 @@ export default function StoreRegistration({
     setError('')
 
     if (step < lastStep) {
-      if (step === 0 && !business.businessType) return
+      if (step === 0) {
+        if (!selectedType || businessTypesLoading || businessTypesError || businessTypes.length === 0) return
+        setValidatingBusinessType(true)
+        try {
+          const verifiedType = await getActiveBusinessType(selectedType.id)
+          if (!verifiedType) {
+            setError('That Business Type is no longer active. Choose an active type to continue.')
+            return
+          }
+          if (business.businessType !== verifiedType.id) updateBusiness('businessType', verifiedType.id)
+        } catch {
+          setError('We could not validate the selected Business Type. Check your connection and retry.')
+          return
+        } finally {
+          setValidatingBusinessType(false)
+        }
+      }
       if (step === 1 && !business.businessCategory) return
       setStep((current) => current + 1)
       return
@@ -237,10 +276,14 @@ export default function StoreRegistration({
   }
 
   const stepContent = [
-    <BusinessTypeStep key="business-type" businessTypes={businessTypes} onChange={(value) => {
+    <BusinessTypeStep key="business-type" businessTypes={businessTypes} error={businessTypesError} loading={businessTypesLoading} onRetry={() => {
+      setBusinessTypesLoading(true)
+      setBusinessTypesError('')
+      setBusinessTypesReload((current) => current + 1)
+    }} onChange={(value) => {
       updateBusiness('businessType', value)
       updateBusiness('businessCategory', '')
-    }} value={business.businessType} />,
+    }} value={selectedType?.id ?? business.businessType} />,
     <BusinessCategoryStep key="business-category" categories={categories} onChange={(value) => updateBusiness('businessCategory', value)} value={business.businessCategory} />,
     <BusinessInformationStep
       key="business-information"
@@ -299,9 +342,9 @@ export default function StoreRegistration({
             <button className="registration-secondary-button" disabled={step === 0 || saving} onClick={() => setStep((current) => current - 1)} type="button">
               Back
             </button>
-            <button className="submit-button" disabled={saving} type="submit">
-              {saving ? 'Submitting...' : step === lastStep ? 'Submit for review' : 'Continue'}
-              {!saving && <span aria-hidden="true">&#8594;</span>}
+            <button className="submit-button" disabled={saving || validatingBusinessType || (step === 0 && (businessTypesLoading || Boolean(businessTypesError) || businessTypes.length === 0))} type="submit">
+              {saving ? 'Submitting...' : validatingBusinessType ? 'Checking...' : step === lastStep ? 'Submit for review' : 'Continue'}
+              {!saving && !validatingBusinessType && <span aria-hidden="true">&#8594;</span>}
             </button>
           </div>
         </form>

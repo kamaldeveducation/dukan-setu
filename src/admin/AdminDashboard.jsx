@@ -1,4 +1,5 @@
 import AdminStores from './AdminStores.jsx'
+import AdminBusinessTypes from './AdminBusinessTypes.jsx'
 import { navigationItems } from './navigation.js'
 import NavigationIcon from './NavigationIcon.jsx'
 
@@ -56,6 +57,8 @@ export default function AdminDashboard({ activePage, displayName, setActivePage 
         </>
       ) : activePage === 'Stores' ? (
         <AdminStores />
+      ) : activePage === 'Business Types' ? (
+        <AdminBusinessTypes />
       ) : (
         <section className="coming-panel" aria-labelledby="coming-title">
           <span className="coming-icon"><NavigationIcon name={activeItem.icon} /></span>

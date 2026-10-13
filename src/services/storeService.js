@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, where, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
-import { getBusinessType } from './businessTypeService'
+import { getActiveBusinessType } from './businessTypeService'
 
 export function getStoreSnapshot(storeId) {
 	return getDoc(doc(db, 'stores', storeId))
@@ -11,10 +11,13 @@ export async function getStoresByOwnerUid(uid) {
 	return snapshot.docs.map((storeDoc) => ({ id: storeDoc.id, ...storeDoc.data() }))
 }
 
-function applicationFields(business, owner) {
+function applicationFields(business, owner, businessType) {
 	return {
 		storeName: business.businessName.trim(),
 		businessType: business.businessType,
+		businessTypeId: businessType.id,
+		businessTypeCode: businessType.code,
+		businessTypeName: businessType.name,
 		businessCategory: business.businessCategory,
 		ownerName: owner.ownerName.trim(),
 		ownerMobile: owner.ownerMobile.trim(),
@@ -29,6 +32,12 @@ function applicationFields(business, owner) {
 }
 
 export async function resubmitStoreApplication(ownerUid, storeId, business, owner) {
+	const businessType = await getActiveBusinessType(business.businessType)
+	if (!businessType) {
+		const error = new Error('Select an active Business Type before resubmitting.')
+		error.code = 'business-type/not-active'
+		throw error
+	}
 	const storeRef = doc(db, 'stores', storeId)
 	const snapshot = await getDoc(storeRef)
 
@@ -36,7 +45,7 @@ export async function resubmitStoreApplication(ownerUid, storeId, business, owne
 		throw new Error('This application can no longer be resubmitted.')
 	}
 
-	const updates = { ...applicationFields(business, owner), status: 'pending', resubmittedAt: serverTimestamp() }
+	const updates = { ...applicationFields(business, owner, businessType), status: 'pending', resubmittedAt: serverTimestamp() }
 	const batch = writeBatch(db)
 	batch.update(storeRef, updates)
 	batch.set(doc(db, 'users', ownerUid), { dukanSetuMerchantStatus: 'pending' }, { mergeFields: ['dukanSetuMerchantStatus'] })
@@ -57,14 +66,19 @@ export async function createStoreRegistration(ownerUid, business, owner) {
 		throw new Error('A store application already exists for this account.')
 	}
 
-	const businessType = getBusinessType(business.businessType)
+	const businessType = await getActiveBusinessType(business.businessType)
+	if (!businessType) {
+		const error = new Error('Select an active Business Type before submitting your registration.')
+		error.code = 'business-type/not-active'
+		throw error
+	}
 	const generatedDocument = doc(collection(db, 'stores'))
-	const storeId = `${businessType?.idPrefix ?? 'STO'}${generatedDocument.id.toUpperCase()}`
+	const storeId = `${businessType.idPrefix ?? 'STO'}${generatedDocument.id.toUpperCase()}`
 	const storeRef = doc(db, 'stores', storeId)
 	const userRef = doc(db, 'users', ownerUid)
 	const store = {
 		storeId,
-		...applicationFields(business, owner),
+		...applicationFields(business, owner, businessType),
 		ownerUid,
 		status: 'pending',
 		createdAt: serverTimestamp(),

@@ -24,7 +24,7 @@ function normalize(store) {
     displayName: store.storeName || store.id,
     displayMobile: store.ownerMobile || store.businessMobile || '',
     displayEmail: store.ownerEmail || store.businessEmail || '',
-    typeName: getBusinessType(store.businessType)?.name || store.businessType || '—',
+    typeName: store.businessTypeName || getBusinessType(store.businessTypeId || store.businessType)?.name || store.businessType || '—',
   }
 }
 

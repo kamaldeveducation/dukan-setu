@@ -1,6 +1,7 @@
 const navigationIcons = {
   dashboard: <><rect x="3" y="3" width="5" height="5" rx="1" /><rect x="12" y="3" width="5" height="5" rx="1" /><rect x="3" y="12" width="5" height="5" rx="1" /><rect x="12" y="12" width="5" height="5" rx="1" /></>,
   store: <><path d="M3 8.5 4.5 3h11L17 8.5" /><path d="M4 8v9h12V8M7 17v-5h6v5" /><path d="M3 8.5a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0" /></>,
+  types: <><rect x="3" y="3" width="14" height="14" rx="2" /><path d="M7 7h6M7 10h6M7 13h3" /></>,
   people: <><path d="M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" /><path d="M5 19v-1a7 7 0 0 1 14 0v1" /><path d="M5.5 5.5a3 3 0 0 0 0 5.8M2.5 18v-1a5 5 0 0 1 2-4" /></>,
   person: <><circle cx="10" cy="6" r="3" /><path d="M4 18v-1a6 6 0 0 1 12 0v1Z" /></>,
   box: <><path d="m10 2 7 4v8l-7 4-7-4V6Z" /><path d="m3.5 5.8 6.5 4 6.5-4M10 10v8" /></>,

@@ -345,6 +345,36 @@ export default function useAppController() {
       await signInWithGoogle()
       return true
     } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('[Google sign-in failed]', {
+          code: error.code || 'unknown',
+          message: error.message || 'No error message was provided.',
+        })
+      }
+
+      if (currentPath === '/register/store') {
+        if (error.code === 'auth/unauthorized-domain' || error.code === 'auth/unauthorized-continue-uri') {
+          setCustomerError('This site is not authorized for Google sign-in. Add its domain in Firebase Console under Authentication > Settings > Authorized domains.')
+        } else if (error.code === 'auth/operation-not-allowed') {
+          setCustomerError('Google sign-in is not enabled for this Firebase project. Enable the Google provider in Firebase Console > Authentication > Sign-in method.')
+        } else if (error.code === 'auth/popup-blocked') {
+          setCustomerError('Your browser blocked the Google sign-in window. Allow pop-ups for this site and try again.')
+        } else if (error.code === 'auth/popup-closed-by-user') {
+          setCustomerError('Google sign-in was cancelled. You can try again when ready.')
+        } else if (error.code === 'auth/cancelled-popup-request') {
+          setCustomerError('Another Google sign-in window was opened. Finish or close it before trying again.')
+        } else if (error.code === 'auth/operation-not-supported-in-this-environment') {
+          setCustomerError('Google sign-in pop-ups are not supported in this browser context. Open the site in a standard browser window and try again.')
+        } else if (error.code === 'auth/network-request-failed') {
+          setCustomerError('Google sign-in could not connect. Check your internet connection and try again.')
+        } else if (error.code === 'auth/account-exists-with-different-credential') {
+          setCustomerError('This email already uses another sign-in method. Go to Sign In with that account before linking Google.')
+        } else {
+          setCustomerError('Google sign-in failed. Check your connection and try again. If this continues, contact support with the error code shown in the browser console.')
+        }
+        return false
+      }
+
       if (error.code === 'auth/account-exists-with-different-credential') {
         setCustomerError('This email already uses another sign-in method. Go to Sign In with that account before linking Google.')
       } else if (error.code === 'auth/popup-closed-by-user') {
