@@ -28,6 +28,16 @@ function normalize(store) {
   }
 }
 
+function categorySummary(store) {
+  const categories = Array.isArray(store.businessCategoryIds) ? store.businessCategoryIds : []
+  if (categories.length === 0) return store.businessCategory
+  return categories.map(({ businessTypeId, categoryId }) => (
+    businessTypeId === store.businessTypeId && categoryId === store.businessCategoryId && store.businessCategory
+      ? store.businessCategory
+      : `${categoryId} (${businessTypeId})`
+  )).join(', ')
+}
+
 function StatusBadge({ status }) {
   return <span className={`store-status store-status-${status || 'unknown'}`}>{status || 'unknown'}</span>
 }
@@ -236,7 +246,7 @@ export default function AdminStores() {
             <dl>
               <DetailRow label="Store ID" value={detailStore.id} />
               <DetailRow label="Business type" value={detailStore.typeName} />
-              <DetailRow label="Category" value={detailStore.businessCategory} />
+              <DetailRow label="Category" value={categorySummary(detailStore)} />
               <DetailRow label="Owner name" value={detailStore.ownerName || owner.data?.displayName || owner.data?.name} />
               <DetailRow label="Owner UID" value={detailStore.ownerUid} />
               <DetailRow label="Owner mobile" value={detailStore.ownerMobile || owner.data?.mobile || owner.data?.phoneNumber} />

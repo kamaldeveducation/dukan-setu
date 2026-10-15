@@ -1,0 +1,28 @@
+.business-category-type-select {
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+  margin: 18px 0 6px;
+}
+
+.business-category-type-select label {
+  color: #52705b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.business-category-type-select select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #d9e1d4;
+  border-radius: 3px;
+  color: #263b32;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.business-type-modal input[readonly]#business-category-business-type {
+  color: #52705b;
+  font-weight: 600;
+}

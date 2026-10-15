@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { auth } from '../firebase'
 import { hasPasswordProvider, linkPasswordToCurrentUser, refreshCurrentUser } from '../auth/authService'
-import { getActiveBusinessType, getBusinessCategories, listActiveBusinessTypes } from '../services/businessTypeService'
+import { getActiveBusinessType, listActiveBusinessTypes, listBusinessTypes } from '../services/businessTypeService'
+import { listBusinessCategories } from '../services/businessCategoryService'
 import { createStoreRegistration, resubmitStoreApplication } from '../services/storeService'
 import BusinessCategoryStep from './BusinessCategoryStep.jsx'
 import BusinessInformationStep from './BusinessInformationStep.jsx'
@@ -10,10 +11,35 @@ import OwnerInformationStep from './OwnerInformationStep.jsx'
 import PasswordStep from './PasswordStep.jsx'
 import RegistrationReview from './RegistrationReview.jsx'
 
+function categoryPairKey(businessTypeId, categoryId) {
+  return JSON.stringify([businessTypeId, categoryId])
+}
+
+function uniqueCategorySelections(selections) {
+  const seen = new Set()
+  return selections.filter((selection) => {
+    if (!selection?.businessTypeId || !selection?.categoryId) return false
+    const key = categoryPairKey(selection.businessTypeId, selection.categoryId)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function businessFromStore(store) {
+  const businessType = store.businessTypeId ?? store.businessType ?? ''
+  const storedSelections = Array.isArray(store.businessCategoryIds) ? store.businessCategoryIds : []
+  const businessCategoryIds = uniqueCategorySelections(storedSelections.length > 0
+    ? storedSelections
+    : store.businessCategoryId && businessType
+      ? [{ businessTypeId: businessType, categoryId: store.businessCategoryId }]
+      : [])
   return {
-    businessType: store.businessType ?? '',
+    businessType,
+    businessTypeId: businessType,
     businessCategory: store.businessCategory ?? '',
+    businessCategoryId: store.businessCategoryId ?? '',
+    businessCategoryIds,
     businessName: store.storeName ?? '',
     businessMobile: store.businessMobile ?? '',
     businessEmail: store.businessEmail ?? '',
@@ -39,7 +65,10 @@ function errorMessage(error) {
 
 const initialBusiness = {
   businessType: '',
+  businessTypeId: '',
   businessCategory: '',
+  businessCategoryId: '',
+  businessCategoryIds: [],
   businessName: '',
   businessMobile: '',
   businessEmail: '',
@@ -78,6 +107,23 @@ export default function StoreRegistration({
   const [businessTypesError, setBusinessTypesError] = useState('')
   const [businessTypesReload, setBusinessTypesReload] = useState(0)
   const [validatingBusinessType, setValidatingBusinessType] = useState(false)
+  const [categories, setCategories] = useState([])
+  const [categoriesTypeId, setCategoriesTypeId] = useState('')
+  const [categoriesLoading, setCategoriesLoading] = useState(Boolean(business.businessType))
+  const [categoriesError, setCategoriesError] = useState('')
+  const [categoriesReload, setCategoriesReload] = useState(0)
+  const [categorySearch, setCategorySearch] = useState('')
+  const [browseOpen, setBrowseOpen] = useState(false)
+  const [browseBusinessTypes, setBrowseBusinessTypes] = useState([])
+  const [browseTypesLoading, setBrowseTypesLoading] = useState(false)
+  const [browseTypesError, setBrowseTypesError] = useState('')
+  const [browseTypesReload, setBrowseTypesReload] = useState(0)
+  const [browseCategories, setBrowseCategories] = useState([])
+  const [browseCategoryCache, setBrowseCategoryCache] = useState([])
+  const [browseLoading, setBrowseLoading] = useState(false)
+  const [browseError, setBrowseError] = useState('')
+  const [browseReload, setBrowseReload] = useState(0)
+  const [browseTypeFilter, setBrowseTypeFilter] = useState('')
 
   useEffect(() => {
     let active = true
@@ -96,6 +142,78 @@ export default function StoreRegistration({
       active = false
     }
   }, [businessTypesReload])
+
+  useEffect(() => {
+    if (!browseOpen) return undefined
+    let active = true
+    listBusinessTypes()
+      .then((records) => {
+        if (!active) return
+        setBrowseBusinessTypes(records)
+      })
+      .catch((loadError) => {
+        if (active) setBrowseTypesError(loadError.message || 'Check your connection and retry.')
+      })
+      .finally(() => {
+        if (active) setBrowseTypesLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [browseOpen, browseTypesReload])
+
+  useEffect(() => {
+    const businessTypeId = business.businessTypeId || business.businessType
+    if (!businessTypeId) return undefined
+    let active = true
+    listBusinessCategories(businessTypeId)
+      .then((records) => {
+        if (!active) return
+        setCategories(records.filter((category) => category.active === true))
+        setCategoriesTypeId(businessTypeId)
+        setCategoriesLoading(false)
+      })
+      .catch((loadError) => {
+        if (!active) return
+        setCategoriesError(loadError.message || 'Check your connection and retry.')
+        setCategoriesTypeId(businessTypeId)
+        setCategoriesLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [business.businessType, business.businessTypeId, categoriesReload])
+
+  useEffect(() => {
+    if (!browseOpen || !browseTypeFilter) return undefined
+    let active = true
+    listBusinessCategories(browseTypeFilter)
+      .then((records) => {
+        if (!active) return
+        const type = browseBusinessTypes.find((businessType) => businessType.id === browseTypeFilter)
+        const activeRecords = records
+          .filter((category) => category.active === true)
+          .map((category) => ({
+            ...category,
+            businessTypeId: browseTypeFilter,
+            businessTypeName: type?.name ?? browseTypeFilter,
+          }))
+        setBrowseCategories(activeRecords)
+        setBrowseCategoryCache((current) => [
+          ...current.filter((category) => category.businessTypeId !== browseTypeFilter),
+          ...activeRecords,
+        ])
+      })
+      .catch((loadError) => {
+        if (active) setBrowseError(loadError.message || 'Check your connection and retry.')
+      })
+      .finally(() => {
+        if (active) setBrowseLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [browseOpen, browseTypeFilter, browseReload, browseBusinessTypes])
 
   useEffect(() => {
     let active = true
@@ -169,8 +287,34 @@ export default function StoreRegistration({
     ...(needsPassword ? ['Create Password'] : []),
   ]
   const lastStep = stepTitles.length - 1
-  const selectedType = businessTypes.find((type) => [type.id, type.code, type.name].includes(business.businessType)) ?? null
-  const categories = getBusinessCategories(selectedType?.id ?? business.businessType)
+  const selectedType = businessTypes.find((type) => [type.id, type.code, type.name].includes(business.businessTypeId || business.businessType)) ?? null
+  const suggestedCategories = categoriesTypeId === selectedType?.id
+    ? categories.map((category) => ({ ...category, businessTypeId: selectedType.id, businessTypeName: selectedType.name }))
+    : []
+  const availableCategories = [...suggestedCategories, ...browseCategoryCache]
+  const availableCategoryMap = new Map(availableCategories.map((category) => [
+    categoryPairKey(category.businessTypeId, category.id),
+    category,
+  ]))
+  const selectedPairs = business.businessCategoryIds ?? []
+  const selectedCategories = selectedPairs.map((pair) => {
+    const category = availableCategoryMap.get(categoryPairKey(pair.businessTypeId, pair.categoryId))
+    const type = browseBusinessTypes.find((businessType) => businessType.id === pair.businessTypeId)
+      ?? businessTypes.find((businessType) => businessType.id === pair.businessTypeId)
+    return {
+      ...pair,
+      name: category?.name ?? pair.categoryId,
+      businessTypeName: category?.businessTypeName ?? type?.name ?? pair.businessTypeId,
+    }
+  })
+  const selectedCategoriesValid = selectedPairs.length > 0
+    && selectedPairs.every((pair) => Boolean(pair.businessTypeId && pair.categoryId))
+  const stepTwoLoading = categoriesLoading
+    || Boolean((business.businessTypeId || business.businessType) && categoriesTypeId !== selectedType?.id)
+    || (browseOpen && browseLoading)
+  const categorySummary = selectedCategories.map((category) => (
+    category.businessTypeId === selectedType?.id ? category.name : `${category.name} (${category.businessTypeName})`
+  )).join(', ')
   const ownerValues = {
     ownerName: owner.ownerName ?? currentUser.displayName ?? '',
     ownerMobile: owner.ownerMobile ?? currentUser.phoneNumber ?? '',
@@ -183,6 +327,71 @@ export default function StoreRegistration({
 
   function updateOwner(field, value) {
     setOwner((current) => ({ ...current, [field]: value }))
+  }
+
+  function toggleCategory(category) {
+    const businessTypeId = category.businessTypeId || selectedType?.id
+    if (!businessTypeId || !category.id) return
+    const key = categoryPairKey(businessTypeId, category.id)
+    setBusiness((current) => {
+      const currentSelections = current.businessCategoryIds ?? []
+      const alreadySelected = currentSelections.some((selection) => categoryPairKey(selection.businessTypeId, selection.categoryId) === key)
+      const nextSelections = alreadySelected
+        ? currentSelections.filter((selection) => categoryPairKey(selection.businessTypeId, selection.categoryId) !== key)
+        : [...currentSelections, { businessTypeId, categoryId: category.id }]
+      const primarySelection = nextSelections.find((selection) => selection.businessTypeId === (current.businessTypeId || current.businessType))
+      const primaryCategory = primarySelection
+        ? availableCategoryMap.get(categoryPairKey(primarySelection.businessTypeId, primarySelection.categoryId))
+        : null
+      return {
+        ...current,
+        businessCategoryIds: nextSelections,
+        businessCategory: primaryCategory?.name ?? '',
+        businessCategoryId: primarySelection?.categoryId ?? '',
+      }
+    })
+  }
+
+  function toggleBrowseCategories() {
+    const shouldOpen = !browseOpen
+    setBrowseOpen(shouldOpen)
+    if (shouldOpen) {
+      setBrowseTypesLoading(true)
+      setBrowseTypesError('')
+    } else {
+      setBrowseTypesLoading(false)
+    }
+    if (shouldOpen && browseTypeFilter) {
+      setBrowseLoading(true)
+      setBrowseError('')
+    } else if (!shouldOpen) {
+      setBrowseLoading(false)
+    }
+  }
+
+  function changeBrowseTypeFilter(businessTypeId) {
+    setBrowseTypeFilter(businessTypeId)
+    setBrowseCategories([])
+    setBrowseError('')
+    setBrowseLoading(Boolean(businessTypeId && browseOpen))
+  }
+
+  function retryBrowseCategories() {
+    setBrowseLoading(true)
+    setBrowseError('')
+    setBrowseReload((current) => current + 1)
+  }
+
+  function retryBusinessTypes() {
+    setBusinessTypesLoading(true)
+    setBusinessTypesError('')
+    setBusinessTypesReload((current) => current + 1)
+  }
+
+  function retryBrowseBusinessTypes() {
+    setBrowseTypesLoading(true)
+    setBrowseTypesError('')
+    setBrowseTypesReload((current) => current + 1)
   }
 
   function passwordProblem() {
@@ -207,7 +416,9 @@ export default function StoreRegistration({
             setError('That Business Type is no longer active. Choose an active type to continue.')
             return
           }
-          if (business.businessType !== verifiedType.id) updateBusiness('businessType', verifiedType.id)
+          if (business.businessTypeId !== verifiedType.id || business.businessType !== verifiedType.id) {
+            setBusiness((current) => ({ ...current, businessType: verifiedType.id, businessTypeId: verifiedType.id }))
+          }
         } catch {
           setError('We could not validate the selected Business Type. Check your connection and retry.')
           return
@@ -215,7 +426,7 @@ export default function StoreRegistration({
           setValidatingBusinessType(false)
         }
       }
-      if (step === 1 && !business.businessCategory) return
+      if (step === 1 && (!selectedCategoriesValid || stepTwoLoading)) return
       setStep((current) => current + 1)
       return
     }
@@ -277,18 +488,55 @@ export default function StoreRegistration({
 
   const stepContent = [
     <BusinessTypeStep key="business-type" businessTypes={businessTypes} error={businessTypesError} loading={businessTypesLoading} onRetry={() => {
-      setBusinessTypesLoading(true)
-      setBusinessTypesError('')
-      setBusinessTypesReload((current) => current + 1)
+      retryBusinessTypes()
     }} onChange={(value) => {
-      updateBusiness('businessType', value)
-      updateBusiness('businessCategory', '')
+      setBusiness((current) => ({
+        ...current,
+        businessType: value,
+        businessTypeId: value,
+        businessCategory: '',
+        businessCategoryId: '',
+        businessCategoryIds: [],
+      }))
+      setCategories([])
+      setCategoriesTypeId('')
+      setCategoriesError('')
+      setCategorySearch('')
+      setCategoriesLoading(Boolean(value))
     }} value={selectedType?.id ?? business.businessType} />,
-    <BusinessCategoryStep key="business-category" categories={categories} onChange={(value) => updateBusiness('businessCategory', value)} value={business.businessCategory} />,
+    <BusinessCategoryStep
+      browseCategories={browseCategories}
+      browseError={browseError}
+      browseLoading={browseLoading}
+      browseOpen={browseOpen}
+      browseTypeFilter={browseTypeFilter}
+      businessTypes={browseBusinessTypes}
+      businessTypesError={browseTypesError}
+      businessTypesLoading={browseTypesLoading}
+      categories={suggestedCategories}
+      error={categoriesError}
+      key="business-category"
+      loading={categoriesLoading || Boolean((business.businessTypeId || business.businessType) && categoriesTypeId !== selectedType?.id)}
+      onBrowseRetry={retryBrowseCategories}
+      onBrowseToggle={toggleBrowseCategories}
+      onBrowseTypeFilterChange={changeBrowseTypeFilter}
+      onBusinessTypesRetry={retryBrowseBusinessTypes}
+      onChange={toggleCategory}
+      onRetry={() => {
+        setCategoriesLoading(true)
+        setCategoriesError('')
+        setCategoriesReload((current) => current + 1)
+      }}
+      onSearchChange={setCategorySearch}
+      onToggleCategory={toggleCategory}
+      search={categorySearch}
+      selectedCategories={selectedCategories}
+      selectedPairs={selectedPairs}
+    />,
     <BusinessInformationStep
       key="business-information"
       businessType={selectedType?.name ?? ''}
-      category={business.businessCategory}
+      category={categorySummary}
       onChange={updateBusiness}
       values={business}
     />,
@@ -296,7 +544,7 @@ export default function StoreRegistration({
     <RegistrationReview
       business={business}
       businessType={selectedType?.name ?? ''}
-      category={business.businessCategory}
+      category={categorySummary}
       key="registration-review"
       owner={ownerValues}
     />,
@@ -342,7 +590,7 @@ export default function StoreRegistration({
             <button className="registration-secondary-button" disabled={step === 0 || saving} onClick={() => setStep((current) => current - 1)} type="button">
               Back
             </button>
-            <button className="submit-button" disabled={saving || validatingBusinessType || (step === 0 && (businessTypesLoading || Boolean(businessTypesError) || businessTypes.length === 0))} type="submit">
+            <button className="submit-button" disabled={saving || validatingBusinessType || (step === 0 && (businessTypesLoading || Boolean(businessTypesError) || businessTypes.length === 0)) || (step === 1 && (!selectedCategoriesValid || stepTwoLoading))} type="submit">
               {saving ? 'Submitting...' : validatingBusinessType ? 'Checking...' : step === lastStep ? 'Submit for review' : 'Continue'}
               {!saving && !validatingBusinessType && <span aria-hidden="true">&#8594;</span>}
             </button>

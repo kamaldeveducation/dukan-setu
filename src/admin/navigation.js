@@ -2,6 +2,7 @@ export const navigationItems = [
   { label: 'Dashboard', icon: 'dashboard' },
   { label: 'Stores', icon: 'store' },
   { label: 'Business Types', icon: 'types' },
+  { label: 'Business Categories', icon: 'categories' },
   { label: 'Merchants', icon: 'people' },
   { label: 'Customers', icon: 'person' },
   { label: 'Products', icon: 'box' },

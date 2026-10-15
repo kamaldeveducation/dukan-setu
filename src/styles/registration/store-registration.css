@@ -86,6 +86,198 @@
   min-height: 190px;
 }
 
+.business-category-step {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.business-category-search {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 14px;
+  color: #40564b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.business-category-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #d6ddd3;
+  border-radius: 3px;
+  color: #24372f;
+  background: #fff;
+  font: inherit;
+  font-weight: 400;
+}
+
+.business-category-search input:focus-visible {
+  outline: 3px solid rgb(82 114 103 / 15%);
+  border-color: #527267;
+}
+
+.business-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+  gap: 10px;
+}
+
+.business-category-count {
+  margin: -6px 0 12px;
+  color: #52665a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.business-category-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 18px;
+}
+
+.business-category-chip {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 10px;
+  border: 1px solid #aab9aa;
+  border-radius: 3px;
+  color: #24483b;
+  background: #f1f6f0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.business-category-chip > span:last-child {
+  color: #52665a;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.business-category-chip:focus-visible,
+.business-category-browse-toggle:focus-visible {
+  outline: 3px solid rgb(82 114 103 / 18%);
+  outline-offset: 2px;
+}
+
+.business-category-section h3 {
+  margin: 0 0 11px;
+  color: #354b3f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.business-category-option {
+  position: relative;
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #d6ddd3;
+  border-radius: 3px;
+  color: #40564b;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.business-category-option:hover {
+  border-color: #82978a;
+}
+
+.business-category-option.is-selected {
+  border-color: #315941;
+  color: #173d34;
+  background: #f1f6f0;
+  box-shadow: inset 0 0 0 1px #315941;
+}
+
+.business-category-option input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin: 0 10px 0 0;
+  accent-color: #315941;
+}
+
+.business-category-option small {
+  margin-left: auto;
+  padding-left: 8px;
+  color: #77847a;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.business-category-option:focus-within {
+  outline: 3px solid rgb(82 114 103 / 18%);
+  outline-offset: 2px;
+}
+
+.business-category-browse {
+  margin-top: 18px;
+  border-top: 1px solid #e8ede5;
+}
+
+.business-category-browse-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+  border: 0;
+  color: #315941;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.business-category-browse-toggle > span:last-child {
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.business-category-browse-panel {
+  padding: 0 0 2px;
+}
+
+.business-category-browse-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.business-category-search select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #d6ddd3;
+  border-radius: 3px;
+  color: #24372f;
+  background: #fff;
+  font: inherit;
+  font-weight: 400;
+}
+
+.business-category-search select:focus-visible {
+  outline: 3px solid rgb(82 114 103 / 15%);
+  border-color: #527267;
+}
+
 .registration-step-fields select {
   width: 100%;
   min-height: 48px;
@@ -217,6 +409,11 @@
 }
 
 @media (max-width: 480px) {
+  .business-category-browse-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
   .registration-form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
