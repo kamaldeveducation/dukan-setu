@@ -3,6 +3,7 @@ export const navigationItems = [
   { label: 'Stores', icon: 'store' },
   { label: 'Business Types', icon: 'types' },
   { label: 'Business Categories', icon: 'categories' },
+  { label: 'Master Categories', icon: 'catalog', group: 'Master Catalog' },
   { label: 'Merchants', icon: 'people' },
   { label: 'Customers', icon: 'person' },
   { label: 'Products', icon: 'box' },

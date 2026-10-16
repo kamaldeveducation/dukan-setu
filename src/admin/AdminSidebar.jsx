@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { navigationItems } from './navigation.js'
 import NavigationIcon from './NavigationIcon.jsx'
 
@@ -16,21 +17,23 @@ export default function AdminSidebar({ activePage, currentUser, displayName, dra
       </div>
       <p className="sidebar-label">WORKSPACE</p>
       <nav className="sidebar-nav" aria-label="Dashboard sections">
-        {navigationItems.map((item) => (
-          <button
-            aria-current={activePage === item.label ? 'page' : undefined}
-            className={`nav-item${activePage === item.label ? ' is-active' : ''}`}
-            key={item.label}
-            onClick={() => {
-              setActivePage(item.label)
-              setDrawerOpen(false)
-            }}
-            type="button"
-          >
-            <NavigationIcon name={item.icon} />
-            <span>{item.label}</span>
-            {item.label === 'Dashboard' && <span className="nav-indicator" aria-hidden="true" />}
-          </button>
+        {navigationItems.map((item, index) => (
+          <Fragment key={item.label}>
+            {item.group && item.group !== navigationItems[index - 1]?.group && <p className="nav-group-label">{item.group.toUpperCase()}</p>}
+            <button
+              aria-current={activePage === item.label ? 'page' : undefined}
+              className={`nav-item${activePage === item.label ? ' is-active' : ''}`}
+              onClick={() => {
+                setActivePage(item.label)
+                setDrawerOpen(false)
+              }}
+              type="button"
+            >
+              <NavigationIcon name={item.icon} />
+              <span>{item.label}</span>
+              {item.label === 'Dashboard' && <span className="nav-indicator" aria-hidden="true" />}
+            </button>
+          </Fragment>
         ))}
       </nav>
       <div className="sidebar-footer">
