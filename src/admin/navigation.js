@@ -5,6 +5,7 @@ export const navigationItems = [
   { label: 'Business Categories', icon: 'categories' },
   { label: 'Master Categories', icon: 'catalog', group: 'Master Catalog' },
   { label: 'Master Sub Categories', icon: 'catalog', group: 'Master Catalog' },
+  { label: 'Master Sub-Subcategories', icon: 'catalog', group: 'Master Catalog' },
   { label: 'Merchants', icon: 'people' },
   { label: 'Customers', icon: 'person' },
   { label: 'Products', icon: 'box' },
