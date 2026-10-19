@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import MasterCategoryImageField from './MasterCategoryImageField.jsx'
 import {
   MAX_MASTER_CATEGORY_LEVEL,
   createMasterCategory,
@@ -18,6 +19,14 @@ function pairKey(businessTypeId, categoryId) {
 
 function StatusBadge({ active }) {
   return <span className={`store-status store-status-${active ? 'approved' : 'rejected'}`}>{active ? 'Active' : 'Inactive'}</span>
+}
+
+function CategoryThumbnail({ category }) {
+  const [failed, setFailed] = useState(false)
+  const url = category.logoUrl || category.logoRefs?.[0]?.logoUrl
+  return url && !failed
+    ? <img alt={category.name} className="master-category-thumbnail" onError={() => setFailed(true)} src={url} />
+    : <span aria-label={`${category.name}: no image`} className="master-category-thumbnail-placeholder" role="img" />
 }
 
 export default function AdminMasterCategories() {
@@ -42,6 +51,8 @@ export default function AdminMasterCategories() {
   const [form, setForm] = useState(emptyForm)
   const [codeEdited, setCodeEdited] = useState(false)
   const [formError, setFormError] = useState('')
+  const [imageAsset, setImageAsset] = useState(null)
+  const [removeImage, setRemoveImage] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState('')
@@ -160,6 +171,8 @@ export default function AdminMasterCategories() {
     setForm({ ...emptyForm, sortOrder: String((topLevelOrders.length ? Math.max(...topLevelOrders) : 0) + 10) })
     setCodeEdited(false)
     setFormError('')
+    setImageAsset(null)
+    setRemoveImage(false)
     setMappingSearch('')
     setDialog({ mode: 'create' })
     ensureOptions()
@@ -176,6 +189,8 @@ export default function AdminMasterCategories() {
     })
     setCodeEdited(true)
     setFormError('')
+    setImageAsset(null)
+    setRemoveImage(false)
     setMappingSearch('')
     setDialog({ mode: 'edit', id: category.id })
     ensureOptions()
@@ -215,10 +230,15 @@ export default function AdminMasterCategories() {
         businessCategoryRefs: form.businessCategoryRefs,
         sortOrder: Number(form.sortOrder),
         active: form.active,
+        imageBlob: imageAsset?.blob || null,
+        imageExtension: imageAsset?.extension || '',
+        removeLogo: removeImage,
       }
       if (dialog.mode === 'edit') {
-        await updateMasterCategory(dialog.id, values)
-        setFeedback({ type: 'success', text: `${form.name.trim()} was updated.` })
+        const result = await updateMasterCategory(dialog.id, values)
+        setFeedback(result?.cleanupErrors?.length
+          ? { type: 'error', text: `${form.name.trim()} was updated, but ${result.cleanupErrors.length} obsolete image file(s) could not be removed.` }
+          : { type: 'success', text: `${form.name.trim()} was updated.` })
       } else {
         await createMasterCategory(values)
         setFeedback({ type: 'success', text: `${form.name.trim()} was added.` })
@@ -399,10 +419,11 @@ export default function AdminMasterCategories() {
       ) : (
         <>
           <table className="business-type-table">
-            <thead><tr><th>Name</th><th>Code / ID</th><th>Parent</th><th>Level</th><th>Linked</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Image</th><th>Name</th><th>Code / ID</th><th>Parent</th><th>Level</th><th>Linked</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {visibleCategories.map((category) => (
                 <tr key={category.id}>
+                  <td><CategoryThumbnail category={category} key={category.logoUrl || category.id} /></td>
                   <td><strong>{category.name}</strong></td>
                   <td><code>{category.id}</code></td>
                   <td>{parentLabel(category)}</td>
@@ -417,7 +438,7 @@ export default function AdminMasterCategories() {
           <ul className="business-type-cards">
             {visibleCategories.map((category) => (
               <li key={category.id}>
-                <div className="business-type-card-head"><strong>{category.name}</strong><StatusBadge active={category.active === true} /></div>
+                <div className="business-type-card-head"><div className="master-category-card-title"><CategoryThumbnail category={category} key={category.logoUrl || category.id} /><strong>{category.name}</strong></div><StatusBadge active={category.active === true} /></div>
                 <p><code>{category.id}</code> <span>Level {category.level}</span></p>
                 <p>Parent: {parentLabel(category)}</p>
                 <p>{category.businessCategoryRefs.length} linked Business {category.businessCategoryRefs.length === 1 ? 'Category' : 'Categories'}</p>
@@ -433,6 +454,21 @@ export default function AdminMasterCategories() {
           <form aria-labelledby="master-category-form-title" aria-modal="true" className="business-type-modal master-category-modal" onClick={(event) => event.stopPropagation()} onSubmit={submitForm} role="dialog">
             <h2 id="master-category-form-title">{dialog.mode === 'edit' ? 'Edit Master Category' : 'Add Master Category'}</h2>
             {formError && <p className="store-feedback store-feedback-error" role="alert">{formError}</p>}
+
+            <MasterCategoryImageField
+              imageAsset={imageAsset}
+              onChange={(asset) => {
+                setImageAsset(asset)
+                setRemoveImage(false)
+              }}
+              onRemove={() => {
+                setImageAsset(null)
+                setRemoveImage(true)
+              }}
+              savedUrl={dialog.mode === 'edit'
+                ? categoryById.get(dialog.id)?.logoUrl || categoryById.get(dialog.id)?.logoRefs?.[0]?.logoUrl || ''
+                : ''}
+            />
 
             <label htmlFor="master-category-name">Category name</label>
             <input

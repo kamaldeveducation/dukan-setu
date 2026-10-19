@@ -1,5 +1,6 @@
 import {
 	collection,
+	deleteField,
 	doc,
 	getDoc,
 	getDocs,
@@ -9,11 +10,13 @@ import {
 	updateDoc,
 	where,
 } from 'firebase/firestore'
-import { auth, db } from '../firebase'
+import { deleteObject, getBytes, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage'
+import { auth, db, storage } from '../firebase'
 import { getActiveBusinessCategory, listBusinessCategories } from './businessCategoryService'
 import { listBusinessTypes } from './businessTypeService'
 
 export const MAX_MASTER_CATEGORY_LEVEL = 3
+const MAX_LOGO_BYTES = 102400
 
 const collectionRef = collection(db, 'master_categories')
 
@@ -32,6 +35,7 @@ function normalizeMasterCategory(snapshot) {
 		parentId: data.parentId ?? null,
 		level: Number.isInteger(data.level) ? data.level : 1,
 		businessCategoryRefs: Array.isArray(data.businessCategoryRefs) ? data.businessCategoryRefs : [],
+		logoRefs: Array.isArray(data.logoRefs) ? data.logoRefs : [],
 	}
 }
 
@@ -74,6 +78,121 @@ function normalizeRefs(refs) {
 		seen.add(key)
 		return { businessTypeId, categoryId }
 	})
+}
+
+function sortedLogoMappings(refs) {
+	return [...refs].sort((left, right) => left.businessTypeId.localeCompare(right.businessTypeId)
+		|| left.categoryId.localeCompare(right.categoryId))
+}
+
+function logoPathFor(ref, code, extension) {
+	return `master_categories/${ref.businessTypeId}/${ref.categoryId}/${code}/logo.${extension}`
+}
+
+function extensionFromPath(path = '') {
+	const extension = path.split('.').pop()?.toLowerCase()
+	return extension === 'jpg' || extension === 'jpeg' ? 'jpg' : extension === 'webp' ? 'webp' : ''
+}
+
+function validateLogoBlob(blob, extension) {
+	const expectedType = extension === 'webp' ? 'image/webp' : 'image/jpeg'
+	if (!(blob instanceof Blob) || blob.size === 0 || blob.size >= MAX_LOGO_BYTES || blob.type !== expectedType) {
+		throw serviceError('invalid-logo', 'The processed category image must be a valid WebP or JPEG smaller than 100 KB. Crop it again and retry.')
+	}
+}
+
+async function rollbackLogoUploads(uploadedPaths, backups) {
+	const results = await Promise.allSettled(uploadedPaths.map(async (path) => {
+		const objectRef = storageRef(storage, path)
+		const backup = backups.get(path)
+		if (backup) await uploadBytes(objectRef, backup.blob, { contentType: backup.contentType })
+		else await deleteObject(objectRef)
+	}))
+	return results.filter((result) => result.status === 'rejected').map((result) => result.reason)
+}
+
+function rollbackError(originalError, rollbackErrors) {
+	if (!rollbackErrors.length) return originalError
+	return serviceError('rollback-failed', `${originalError.message || 'The category could not be saved.'} ${rollbackErrors.length} image object(s) could not be restored or removed; retry the operation or inspect Storage.`)
+}
+
+async function uploadLogoMappings({ refs, code, blob, extension, existingLogoRefs = [] }) {
+	if (!refs.length) throw serviceError('logo-mapping-required', 'Select at least one Business Category mapping before saving this image. The image must be stored under a mapped Business Type and Business Category.')
+	const mappings = sortedLogoMappings(refs)
+	const targets = mappings.map((mapping) => ({ ...mapping, logoPath: logoPathFor(mapping, code, extension) }))
+	const existingByPath = new Map(existingLogoRefs.filter((item) => item?.logoPath && item?.logoUrl).map((item) => [item.logoPath, item]))
+	const forceUpload = Boolean(blob)
+	const missingTargets = targets.filter((target) => forceUpload || !existingByPath.has(target.logoPath))
+	let bytes = blob
+	if (!bytes && missingTargets.length) {
+		const sourceRef = existingLogoRefs.find((item) => item?.logoPath)
+		if (!sourceRef) throw serviceError('logo-source-missing', 'The existing image has no usable Storage path. Choose a replacement image before changing its Business Category mappings.')
+		try {
+			const downloaded = await getBytes(storageRef(storage, sourceRef.logoPath))
+			bytes = new Blob([downloaded], { type: extension === 'webp' ? 'image/webp' : 'image/jpeg' })
+		} catch {
+			throw serviceError('logo-copy-failed', 'The existing image could not be read to add its new mapping. Replace the image and try again.')
+		}
+		validateLogoBlob(bytes, extension)
+	}
+	if (bytes) validateLogoBlob(bytes, extension)
+
+	const backups = new Map()
+	for (const target of missingTargets) {
+		if (existingByPath.has(target.logoPath)) {
+			try {
+				const previous = await getBytes(storageRef(storage, target.logoPath))
+				const contentType = extension === 'webp' ? 'image/webp' : 'image/jpeg'
+				backups.set(target.logoPath, { blob: new Blob([previous], { type: contentType }), contentType })
+			} catch {
+				throw serviceError('logo-backup-failed', 'The current image could not be backed up safely. No image was changed; retry or choose a different image.')
+			}
+		}
+	}
+
+	const uploadedPaths = []
+	try {
+		for (const target of missingTargets) {
+			const objectRef = storageRef(storage, target.logoPath)
+			await uploadBytes(objectRef, bytes, { contentType: extension === 'webp' ? 'image/webp' : 'image/jpeg' })
+			uploadedPaths.push(target.logoPath)
+		}
+		const logoRefs = await Promise.all(targets.map(async (target) => {
+			const existing = existingByPath.get(target.logoPath)
+			return {
+				businessTypeId: target.businessTypeId,
+				categoryId: target.categoryId,
+				logoPath: target.logoPath,
+				logoUrl: existing && !forceUpload ? existing.logoUrl : await getDownloadURL(storageRef(storage, target.logoPath)),
+			}
+		}))
+		return { logoRefs, uploadedPaths, backups }
+	} catch (error) {
+		const rollbackErrors = await rollbackLogoUploads(uploadedPaths, backups)
+		throw rollbackError(error, rollbackErrors)
+	}
+}
+
+async function cleanupObsoleteLogoPaths(oldLogoRefs, newLogoRefs) {
+	const retained = new Set(newLogoRefs.map((item) => item.logoPath))
+	const candidates = [...new Set(oldLogoRefs.map((item) => item?.logoPath).filter((path) => path && !retained.has(path)))]
+	if (!candidates.length) return []
+	const snapshot = await getDocs(collectionRef)
+	const referenced = new Set()
+	for (const category of snapshot.docs) {
+		const data = category.data()
+		if (data.logoPath) referenced.add(data.logoPath)
+		for (const item of Array.isArray(data.logoRefs) ? data.logoRefs : []) {
+			if (item?.logoPath) referenced.add(item.logoPath)
+		}
+	}
+	const results = await Promise.allSettled(candidates.filter((path) => !referenced.has(path)).map((path) => deleteObject(storageRef(storage, path))))
+	return results.filter((result) => result.status === 'rejected').map((result) => result.reason)
+}
+
+function logoFields(logoRefs) {
+	if (!logoRefs.length) return { logoUrl: deleteField(), logoPath: deleteField(), logoRefs: deleteField() }
+	return { logoUrl: logoRefs[0].logoUrl, logoPath: logoRefs[0].logoPath, logoRefs }
 }
 
 // Only mappings not already stored must point at an active Business Category.
@@ -176,6 +295,7 @@ export async function createMasterCategory(values) {
 	const fields = validateFields({ ...values, active: values.active ?? true })
 	const parentId = values.parentId || null
 	const refs = normalizeRefs(values.businessCategoryRefs ?? [])
+	const imageBlob = values.imageBlob || null
 	const parent = await resolveParent(parentId)
 	await validateNewRefs(refs)
 	if (await findDuplicateName(fields.name, parentId)) {
@@ -184,25 +304,43 @@ export async function createMasterCategory(values) {
 	if (parent && fields.active && parent.active !== true) {
 		throw serviceError('inactive-parent', 'Activate the parent category before creating an active child.')
 	}
+	if (imageBlob && !refs.length) {
+		throw serviceError('logo-mapping-required', 'Select at least one Business Category mapping before saving this image. The image must be stored under a mapped Business Type and Business Category.')
+	}
 
 	// Document ID is the code; never let Firestore auto-generate one.
 	const reference = doc(collectionRef, fields.code)
-	await runTransaction(db, async (transaction) => {
-		const existing = await transaction.get(reference)
-		if (existing.exists()) throw serviceError('duplicate-code', 'A Master Category with this code already exists.')
-		const timestamp = serverTimestamp()
-		transaction.set(reference, {
-			name: fields.name,
-			code: fields.code,
-			parentId,
-			level: parent ? parent.level + 1 : 1,
-			businessCategoryRefs: refs,
-			sortOrder: fields.sortOrder,
-			active: fields.active,
-			createdAt: timestamp,
-			updatedAt: timestamp,
+	if ((await getDoc(reference)).exists()) throw serviceError('duplicate-code', 'A Master Category with this code already exists.')
+	const uploadResult = imageBlob
+		? await uploadLogoMappings({ refs, code: fields.code, blob: imageBlob, extension: values.imageExtension })
+		: { logoRefs: [], uploadedPaths: [], backups: new Map() }
+	try {
+		await runTransaction(db, async (transaction) => {
+			const existing = await transaction.get(reference)
+			if (existing.exists()) throw serviceError('duplicate-code', 'A Master Category with this code already exists.')
+			const timestamp = serverTimestamp()
+			const data = {
+				name: fields.name,
+				code: fields.code,
+				parentId,
+				level: parent ? parent.level + 1 : 1,
+				businessCategoryRefs: refs,
+				sortOrder: fields.sortOrder,
+				active: fields.active,
+				createdAt: timestamp,
+				updatedAt: timestamp,
+			}
+			if (uploadResult.logoRefs.length) Object.assign(data, {
+				logoUrl: uploadResult.logoRefs[0].logoUrl,
+				logoPath: uploadResult.logoRefs[0].logoPath,
+				logoRefs: uploadResult.logoRefs,
+			})
+			transaction.set(reference, data)
 		})
-	})
+	} catch (error) {
+		const rollbackErrors = await rollbackLogoUploads(uploadResult.uploadedPaths, uploadResult.backups)
+		throw rollbackError(error, rollbackErrors)
+	}
 	return reference.id
 }
 
@@ -218,6 +356,10 @@ export async function updateMasterCategory(id, values) {
 	const fields = validateFields({ ...values, code: current.code })
 	const parentId = values.parentId || null
 	const refs = normalizeRefs(values.businessCategoryRefs ?? [])
+	const oldLogoRefs = current.logoRefs.filter((item) => item?.logoPath)
+	if (current.logoPath && !oldLogoRefs.some((item) => item.logoPath === current.logoPath)) {
+		oldLogoRefs.push({ logoPath: current.logoPath, logoUrl: current.logoUrl || '' })
+	}
 	const parent = await resolveParent(parentId, id)
 	await validateNewRefs(refs, current.businessCategoryRefs)
 	if (await findDuplicateName(fields.name, parentId, id)) {
@@ -235,7 +377,34 @@ export async function updateMasterCategory(id, values) {
 		throw serviceError('inactive-parent', 'Activate the parent category before activating this child.')
 	}
 
-	await updateDoc(reference, {
+	let uploadResult = { logoRefs: oldLogoRefs, uploadedPaths: [], backups: new Map() }
+	let imageFields = {}
+	if (values.removeLogo) {
+		uploadResult.logoRefs = []
+		imageFields = logoFields([])
+	} else if (values.imageBlob) {
+		uploadResult = await uploadLogoMappings({
+			refs,
+			code: current.code,
+			blob: values.imageBlob,
+			extension: values.imageExtension,
+			existingLogoRefs: oldLogoRefs,
+		})
+		imageFields = logoFields(uploadResult.logoRefs)
+	} else if (oldLogoRefs.length) {
+		if (!refs.length) {
+			throw serviceError('logo-mapping-required', 'This category has an image but no Business Category mapping. Add a mapping or explicitly remove the image before saving.')
+		}
+		const extension = extensionFromPath(current.logoPath || oldLogoRefs[0].logoPath)
+		if (!extension) throw serviceError('invalid-logo-path', 'The current image path has an unsupported format. Replace the image before changing its mappings.')
+		uploadResult = await uploadLogoMappings({ refs, code: current.code, extension, existingLogoRefs: oldLogoRefs })
+		imageFields = logoFields(uploadResult.logoRefs)
+	} else if (current.logoUrl && refs.length) {
+		throw serviceError('legacy-logo-path', 'Replace this legacy image before assigning Business Category mappings so it can be stored under the required hierarchy.')
+	}
+
+	try {
+		await updateDoc(reference, {
 		name: fields.name,
 		parentId,
 		level,
@@ -243,7 +412,19 @@ export async function updateMasterCategory(id, values) {
 		sortOrder: fields.sortOrder,
 		active: fields.active,
 		updatedAt: serverTimestamp(),
-	})
+		...imageFields,
+		})
+	} catch (error) {
+		const rollbackErrors = await rollbackLogoUploads(uploadResult.uploadedPaths, uploadResult.backups)
+		throw rollbackError(error, rollbackErrors)
+	}
+	let cleanupErrors = []
+	try {
+		cleanupErrors = await cleanupObsoleteLogoPaths(oldLogoRefs, uploadResult.logoRefs)
+	} catch (error) {
+		cleanupErrors = [error]
+	}
+	return { cleanupErrors }
 }
 
 export async function setMasterCategoryActive(id, active) {

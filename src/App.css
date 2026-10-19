@@ -17,3 +17,4 @@
 @import './styles/admin/admin-business-types.css';
 @import './styles/admin/admin-business-categories.css';
 @import './styles/admin/admin-master-categories.css';
+@import '/src/styles/admin/admin-master-subcategories.css';

@@ -1,0 +1,34 @@
+.admin-master-subcategories .dashboard-intro { max-width: 680px; }
+
+.master-subcategory-mapping-picker {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 8px;
+}
+
+.master-subcategory-mapping-picker select { min-width: 0; }
+.master-subcategory-notice { color: #80651d; font-size: 12px; }
+.master-subcategory-upload-progress { color: #315941; font-size: 12px; font-weight: 600; }
+.master-category-compressed-result { padding: 8px 10px; border: 1px solid #c9d8c9; color: #315941; background: #edf4ea; font-size: 12px; }
+
+.master-subcategory-preview-button {
+	display: block;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: zoom-in;
+}
+
+.master-subcategory-preview-button:focus-visible { outline: 3px solid #d3be5f; outline-offset: 3px; }
+.master-subcategory-preview-button .master-category-thumbnail { margin: 0; }
+.master-subcategory-preview-dialog { display: grid; max-width: min(92vw, 900px); max-height: 92vh; justify-items: end; gap: 10px; padding: 14px; background: #fff; }
+.master-subcategory-preview-dialog img { display: block; max-width: 100%; max-height: calc(92vh - 64px); object-fit: contain; }
+.master-subcategory-preview-backdrop { z-index: 140; }
+.master-subcategory-preview-backdrop .master-subcategory-preview-dialog { border-radius: 3px; }
+
+@media (max-width: 520px) {
+	.master-subcategory-mapping-picker { grid-template-columns: minmax(0, 1fr); }
+	.master-subcategory-mapping-picker .store-btn { justify-self: start; }
+	.master-subcategory-preview-dialog { width: 100%; padding: 10px; }
+}
