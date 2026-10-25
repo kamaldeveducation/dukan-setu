@@ -4,6 +4,8 @@ import AdminBusinessCategories from './AdminBusinessCategories.jsx'
 import AdminMasterCategories from './AdminMasterCategories.jsx'
 import AdminMasterSubCategories from './AdminMasterSubCategories.jsx'
 import AdminMasterSubSubCategories from './AdminMasterSubSubCategories.jsx'
+import ProductConfigurationLayout from '../features/product-configuration/ProductConfigurationLayout.jsx'
+import { isProductConfigurationPage } from '../features/product-configuration/navigation.js'
 import { navigationItems } from './navigation.js'
 import NavigationIcon from './NavigationIcon.jsx'
 
@@ -71,6 +73,8 @@ export default function AdminDashboard({ activePage, displayName, setActivePage 
         <AdminMasterSubCategories />
       ) : activePage === 'Master Sub-Subcategories' ? (
         <AdminMasterSubSubCategories />
+      ) : isProductConfigurationPage(activePage) ? (
+        <ProductConfigurationLayout activePage={activePage} onNavigate={setActivePage} />
       ) : (
         <section className="coming-panel" aria-labelledby="coming-title">
           <span className="coming-icon"><NavigationIcon name={activeItem.icon} /></span>
