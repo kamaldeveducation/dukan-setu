@@ -250,3 +250,17 @@ export async function deleteFormConfig(id) {
     throw toServiceError(error, 'The Form Configuration could not be deleted.')
   }
 }
+
+// Read-only: loads the active configuration and the live groups/fields it references.
+export async function loadActiveFormForProductType(productTypeId) {
+  try {
+    const snapshot = await getDocs(query(formConfigsRef, where('productTypeId', '==', productTypeId), where('status', '==', 'active')))
+    const configs = snapshot.docs.map(normalizeFormConfig)
+      .sort((left, right) => (right.updatedAt?.getTime() ?? 0) - (left.updatedAt?.getTime() ?? 0))
+    if (!configs.length) return null
+    const [groups, fields] = await Promise.all([listFieldGroups(), listGlobalFields()])
+    return { config: configs[0], groups, fields }
+  } catch (error) {
+    throw toServiceError(error, 'The Form Configuration could not be loaded.')
+  }
+}

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
 
-const MAX_BYTES = 102400
+const DEFAULT_MAX_BYTES = 102400
+// Lowest zoom ratio (relative to the image's natural size) the cropper allows.
+const DEFAULT_MIN_ZOOM_RATIO = 0.1
 const QUALITIES = [0.9, 0.78, 0.66, 0.54, 0.42, 0.3]
 const SCALES = [1, 0.82, 0.68, 0.54, 0.4, 0.28]
 
@@ -21,7 +23,11 @@ function canvasBlob(canvas, type, quality) {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality))
 }
 
-async function compressCanvas(sourceCanvas, webpOnly) {
+function formatLimit(maxBytes) {
+  return `${Math.round(maxBytes / 1024)} KB`
+}
+
+async function compressCanvas(sourceCanvas, webpOnly, maxBytes) {
   const baseWidth = sourceCanvas.width
   const baseHeight = sourceCanvas.height
   for (const type of (webpOnly ? ['image/webp'] : ['image/webp', 'image/jpeg'])) {
@@ -33,16 +39,14 @@ async function compressCanvas(sourceCanvas, webpOnly) {
       canvas.height = height
       const context = canvas.getContext('2d')
       if (!context) throw new Error('Your browser could not prepare the cropped image.')
-      if (type === 'image/jpeg') {
-        context.fillStyle = '#ffffff'
-        context.fillRect(0, 0, width, height)
-      }
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, width, height)
       context.imageSmoothingEnabled = true
       context.imageSmoothingQuality = 'high'
       context.drawImage(sourceCanvas, 0, 0, width, height)
       for (const quality of QUALITIES) {
         const blob = await canvasBlob(canvas, type, quality)
-        if (blob?.type === type && blob.size > 0 && blob.size < MAX_BYTES) {
+        if (blob?.type === type && blob.size > 0 && blob.size < maxBytes) {
           return {
             blob,
             contentType: type,
@@ -55,11 +59,25 @@ async function compressCanvas(sourceCanvas, webpOnly) {
       }
     }
   }
-  throw new Error('This crop could not be compressed below 100 KB. Try a smaller crop or a simpler image.')
+  throw new Error(`This crop could not be compressed below ${formatLimit(maxBytes)}. Try a smaller crop or a simpler image.`)
 }
 
-export default function MasterCategoryImageField({ savedUrl = '', imageAsset, onChange, onRemove, webpOnly = false, showCompressedInCropper = false, imageLabel = 'Category logo / image', imageNoun = 'category' }) {
+export default function MasterCategoryImageField({
+  savedUrl = '',
+  imageAsset,
+  onChange,
+  onRemove,
+  webpOnly = false,
+  showCompressedInCropper = false,
+  imageLabel = 'Category logo / image',
+  imageNoun = 'category',
+  maxBytes = DEFAULT_MAX_BYTES,
+  minZoomRatio = DEFAULT_MIN_ZOOM_RATIO,
+  enableCamera = false,
+}) {
+  const inputId = useId()
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const imageRef = useRef(null)
   const cropperRef = useRef(null)
   const objectUrlsRef = useRef(new Set())
@@ -78,8 +96,21 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
 
   useEffect(() => {
     if (!editorOpen || !imageLoaded || !imageRef.current) return undefined
-    cropperRef.current = new Cropper(imageRef.current, {
+    const cropper = new Cropper(imageRef.current, {
       aspectRatio: Number.NaN,
+      // viewMode 0 lets the image shrink below the crop box, leaving empty space around it.
+      zoom: (event) => {
+        const { ratio, originalEvent } = event.detail
+        if (ratio < minZoomRatio) {
+          event.preventDefault()
+          return
+        }
+        if (!originalEvent) return
+        // Wheel and pinch zooms are re-applied around the image center, so the image does not drift.
+        event.preventDefault()
+        const canvas = cropper.getCanvasData()
+        cropper.zoomTo(ratio, { x: canvas.left + canvas.width / 2, y: canvas.top + canvas.height / 2 })
+      },
       autoCropArea: 0.82,
       background: false,
       checkOrientation: true,
@@ -92,15 +123,16 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
       restore: false,
       rotatable: true,
       toggleDragModeOnDblclick: false,
-      viewMode: 1,
+      viewMode: 0,
       zoomOnTouch: true,
       zoomOnWheel: true,
     })
+    cropperRef.current = cropper
     return () => {
       cropperRef.current?.destroy()
       cropperRef.current = null
     }
-  }, [editorOpen, imageLoaded])
+  }, [editorOpen, imageLoaded, minZoomRatio])
 
   function createObjectUrl(blob) {
     const url = URL.createObjectURL(blob)
@@ -113,6 +145,7 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
     URL.revokeObjectURL(url)
   }
 
+  // Camera capture and the gallery picker both feed this same crop flow.
   async function chooseFile(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -131,6 +164,13 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
     } catch (imageError) {
       setError(imageError.message || 'The selected image could not be opened.')
     }
+  }
+
+  function closeEditor() {
+    if (processing) return
+    revokeObjectUrl(processedAsset?.previewUrl)
+    setProcessedAsset(null)
+    setEditorOpen(false)
   }
 
   function openCropEditor() {
@@ -161,7 +201,7 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
         imageSmoothingQuality: 'high',
       })
       if (!canvas) throw new Error('The crop could not be created. Adjust the selection and try again.')
-      const result = await compressCanvas(canvas, webpOnly)
+      const result = await compressCanvas(canvas, webpOnly, maxBytes)
       revokeObjectUrl(processedAsset?.previewUrl)
       const asset = { ...result, previewUrl: createObjectUrl(result.blob) }
       if (showCompressedInCropper) {
@@ -188,6 +228,7 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
     if (!processedAsset) return
     revokeObjectUrl(imageAsset?.previewUrl)
     onChange(processedAsset)
+    setProcessedAsset(null)
     setEditorOpen(false)
   }
 
@@ -209,17 +250,30 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
 
   const previewUrl = imageAsset?.previewUrl || savedUrl
 
+  const acceptedTypes = 'image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif'
+
   return (
     <div className="master-category-image-field">
-      <label htmlFor="master-category-image-upload">{imageLabel}</label>
+      <label htmlFor={inputId}>{imageLabel}</label>
       <input
-        accept="image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif"
+        accept={acceptedTypes}
         className="master-category-file-input"
-        id="master-category-image-upload"
+        id={inputId}
         onChange={chooseFile}
         ref={fileInputRef}
         type="file"
       />
+      {enableCamera && (
+        <input
+          accept="image/*"
+          capture="environment"
+          className="master-category-file-input"
+          aria-label={`${imageLabel} camera capture`}
+          onChange={chooseFile}
+          ref={cameraInputRef}
+          type="file"
+        />
+      )}
       <div className="master-category-image-row">
         {previewUrl ? (
           <img alt="Master Category preview" className="master-category-image-preview" src={previewUrl} />
@@ -230,14 +284,17 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
           {imageAsset ? (
             <small>
               {(imageAsset.size / 1024).toFixed(1)} KB · {imageAsset.width} × {imageAsset.height} px · {imageAsset.extension.toUpperCase()}
-              {' · Under 100 KB'}
+              {` · Under ${formatLimit(maxBytes)}`}
             </small>
           ) : (
             <small>{savedUrl ? 'Current category image' : 'No image selected'}</small>
           )}
           <div className="store-actions">
+            {enableCamera && (
+              <button className="store-btn" onClick={() => cameraInputRef.current?.click()} type="button">Open Camera</button>
+            )}
             <button className="store-btn" onClick={() => fileInputRef.current?.click()} type="button">
-              {previewUrl ? 'Change Image' : 'Upload Image'}
+              {enableCamera ? 'Gallery' : previewUrl ? 'Change Image' : 'Upload Image'}
             </button>
             {(source || imageAsset) && <button className="store-btn" onClick={openCropEditor} type="button">Crop Image</button>}
             {previewUrl && <button className="store-btn" onClick={removeImage} type="button">Remove Image</button>}
@@ -246,7 +303,7 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
       </div>
       {error && <p className="master-category-image-error" role="alert">{error}</p>}
       {editorOpen && source && (
-        <div className="master-category-crop-backdrop" onClick={() => !processing && setEditorOpen(false)} role="presentation">
+        <div className="master-category-crop-backdrop" onClick={closeEditor} role="presentation">
           <section aria-labelledby="master-category-crop-title" aria-modal="true" className="master-category-crop-dialog" onClick={(event) => event.stopPropagation()} role="dialog">
               <h3 id="master-category-crop-title">Crop {imageNoun} image</h3>
             {source.detectedFormat === 'gif' && <p className="master-category-gif-note">Animated GIFs are converted to a static image when cropped.</p>}
@@ -262,12 +319,15 @@ export default function MasterCategoryImageField({ savedUrl = '', imageAsset, on
               <button className="store-btn" onClick={resetCrop} type="button">Reset crop</button>
             </div>
             {showCompressedInCropper && processedAsset && (
-              <p className="master-category-compressed-result" role="status">
-                Final compressed image: {(processedAsset.size / 1024).toFixed(1)} KB · {processedAsset.extension.toUpperCase()}
-              </p>
+              <div className="master-category-compressed-result" role="status">
+                <img alt="Compressed crop preview" src={processedAsset.previewUrl} />
+                <p>
+                  Final compressed image: {(processedAsset.size / 1024).toFixed(1)} KB · {processedAsset.width} × {processedAsset.height} px · {processedAsset.extension.toUpperCase()}
+                </p>
+              </div>
             )}
             <div className="store-actions">
-              <button className="store-btn" disabled={processing} onClick={() => setEditorOpen(false)} type="button">Cancel</button>
+              <button className="store-btn" disabled={processing} onClick={closeEditor} type="button">Cancel</button>
               {showCompressedInCropper && processedAsset && <button className="store-btn store-btn-approve" disabled={processing} onClick={useProcessedCrop} type="button">Use Cropped Image</button>}
               <button className="store-btn store-btn-approve" disabled={processing || !imageLoaded} onClick={applyCrop} type="button">{processing ? 'Compressing...' : showCompressedInCropper ? 'Compress Crop' : 'Apply Crop'}</button>
             </div>

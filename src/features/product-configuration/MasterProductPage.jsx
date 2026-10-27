@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listBusinessCategories } from '../../services/businessCategoryService.js'
 import { listActiveBusinessTypes } from '../../services/businessTypeService.js'
+import DynamicProductForm from './components/DynamicProductForm.jsx'
 import { listBusinessCategoryMappings } from './services/businessCategoryMappingService.js'
 import { listProductTypeConfigs } from './services/productTypeConfigService.js'
 
@@ -191,6 +192,7 @@ export default function MasterProductPage() {
                 <div><dt>Business Category</dt><dd>{selectedBusinessCategory.name || selectedBusinessCategory.id}</dd></div>
                 <div><dt>Product Type</dt><dd>{selectedProductType.name}</dd></div>
               </dl>
+              <DynamicProductForm key={selectedProductType.id} productTypeId={selectedProductType.id} />
             </section>
           )}
         </>
