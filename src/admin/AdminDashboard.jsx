@@ -73,6 +73,8 @@ export default function AdminDashboard({ activePage, displayName, setActivePage 
         <AdminMasterSubCategories />
       ) : activePage === 'Master Sub-Subcategories' ? (
         <AdminMasterSubSubCategories />
+      ) : activePage === 'Master Products' ? (
+        <ProductConfigurationLayout activePage="Master Products" onNavigate={setActivePage} />
       ) : isProductConfigurationPage(activePage) ? (
         <ProductConfigurationLayout activePage={activePage} onNavigate={setActivePage} />
       ) : (

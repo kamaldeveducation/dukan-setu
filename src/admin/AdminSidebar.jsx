@@ -35,7 +35,7 @@ export default function AdminSidebar({ activePage, currentUser, displayName, dra
               <span>{item.label}</span>
               {item.label === 'Dashboard' && <span className="nav-indicator" aria-hidden="true" />}
             </button>
-            {item.group === 'Master Catalog' && navigationItems[index + 1]?.group !== item.group && (
+            {item.label === 'Master Products' && (
               <AdminNavigationGroup
                 activePage={activePage}
                 id="product-configuration-studio"

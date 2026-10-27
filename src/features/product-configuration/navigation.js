@@ -6,7 +6,6 @@ export const productConfigurationNavigation = {
     { label: 'Product Type Configuration' },
     { label: 'Business Category Mapping' },
     { label: 'Form Builder' },
-    { label: 'Dynamic Master Product' },
   ],
 }
 

@@ -39,6 +39,112 @@
   margin-top: 18px;
 }
 
+.dynamic-master-product-selection {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+  margin-top: 26px;
+}
+
+.dynamic-master-product-field {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: #52705b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dynamic-master-product-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid #d9e1d4;
+  border-radius: 3px;
+  color: #263b32;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.dynamic-master-product-field select:focus {
+  outline: 2px solid #a9c2ac;
+  outline-offset: 1px;
+}
+
+.dynamic-master-product-field select:disabled {
+  color: #718075;
+  background: #f3f5f1;
+}
+
+.dynamic-master-product-required {
+  color: #9b2c2c;
+}
+
+.dynamic-master-product-note,
+.dynamic-master-product-inline-error {
+  color: #718075;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dynamic-master-product-inline-error {
+  color: #9b2c2c;
+}
+
+.dynamic-master-product-inline-error .store-btn {
+  margin: 4px 0;
+}
+
+.dynamic-master-product-confirmation {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid #dfe5dc;
+}
+
+.dynamic-master-product-confirmation h2 {
+  margin: 0 0 14px;
+  color: #24372f;
+  font-size: 18px;
+}
+
+.dynamic-master-product-confirmation dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.dynamic-master-product-confirmation dl > div {
+  min-width: 0;
+}
+
+.dynamic-master-product-confirmation dt {
+  margin-bottom: 4px;
+  color: #718075;
+  font-size: 12px;
+}
+
+.dynamic-master-product-confirmation dd {
+  margin: 0;
+  color: #24372f;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .dynamic-master-product-selection,
+  .dynamic-master-product-confirmation dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+}
+
 .product-type-config-toolbar {
   display: flex;
   flex-wrap: wrap;

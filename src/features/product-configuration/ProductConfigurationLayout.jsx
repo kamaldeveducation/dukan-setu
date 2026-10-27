@@ -1,5 +1,5 @@
 import BusinessCategoryMappingPage from './BusinessCategoryMappingPage.jsx'
-import DynamicMasterProductPage from './DynamicMasterProductPage.jsx'
+import MasterProductPage from './MasterProductPage.jsx'
 import FieldGroupsPage from './FieldGroupsPage.jsx'
 import FormBuilderPage from './FormBuilderPage.jsx'
 import GlobalFieldLibraryPage from './GlobalFieldLibraryPage.jsx'
@@ -12,7 +12,7 @@ const pages = {
   'Product Type Configuration': ProductTypeConfigurationPage,
   'Business Category Mapping': BusinessCategoryMappingPage,
   'Form Builder': FormBuilderPage,
-  'Dynamic Master Product': DynamicMasterProductPage,
+  'Master Products': MasterProductPage,
 }
 
 export default function ProductConfigurationLayout({ activePage, onNavigate }) {

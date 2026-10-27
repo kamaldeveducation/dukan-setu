@@ -6,6 +6,7 @@ export const navigationItems = [
   { label: 'Master Categories', icon: 'catalog', group: 'Master Catalog' },
   { label: 'Master Sub Categories', icon: 'catalog', group: 'Master Catalog' },
   { label: 'Master Sub-Subcategories', icon: 'catalog', group: 'Master Catalog' },
+  { label: 'Master Products', icon: 'box' },
   { label: 'Merchants', icon: 'people' },
   { label: 'Customers', icon: 'person' },
   { label: 'Products', icon: 'box' },
