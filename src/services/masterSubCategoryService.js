@@ -3,9 +3,11 @@ import {
 	doc,
 	getDoc,
 	getDocs,
+	query,
 	runTransaction,
 	serverTimestamp,
 	updateDoc,
+	where,
 } from 'firebase/firestore'
 import { deleteObject, getBytes, getDownloadURL, ref as storageRef, uploadBytes, uploadBytesResumable } from 'firebase/storage'
 import { auth, db, storage } from '../firebase'
@@ -203,6 +205,16 @@ export async function listMasterSubCategories() {
 	return snapshot.docs.map(normalizeSubCategory).sort((left, right) => (
 		Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) || String(left.name).localeCompare(String(right.name))
 	))
+}
+
+// Targeted read: only active sub categories under the given Master Category.
+export async function listMasterSubCategoriesByParent(parentId) {
+	const snapshot = await getDocs(query(subCategoriesRef, where('parentId', '==', parentId)))
+	return snapshot.docs.map(normalizeSubCategory)
+		.filter((category) => category.active === true)
+		.sort((left, right) => (
+			Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) || String(left.name).localeCompare(String(right.name))
+		))
 }
 
 export const generateMasterSubCategoryCode = generateMasterCategoryCode

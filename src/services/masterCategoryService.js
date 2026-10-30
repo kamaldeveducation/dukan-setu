@@ -268,6 +268,19 @@ export async function listMasterCategories() {
 	))
 }
 
+// Targeted read: only top-level, active categories mapped to the given Business Category.
+export async function listMasterCategoriesForBusinessCategory(businessTypeId, categoryId) {
+	const snapshot = await getDocs(query(
+		collectionRef,
+		where('businessCategoryRefs', 'array-contains', { businessTypeId, categoryId }),
+	))
+	return snapshot.docs.map(normalizeMasterCategory)
+		.filter((category) => category.parentId === null && category.active === true)
+		.sort((left, right) => (
+			Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) || String(left.name).localeCompare(String(right.name))
+		))
+}
+
 // One pass over Business Types and their categories; inactive categories are flagged so callers can hide them from new selections.
 export async function listMasterCategoryFilterOptions() {
 	const businessTypes = await listBusinessTypes()

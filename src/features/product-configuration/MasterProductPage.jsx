@@ -1,49 +1,65 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { listBusinessCategories } from '../../services/businessCategoryService.js'
 import { listActiveBusinessTypes } from '../../services/businessTypeService.js'
-import DynamicProductForm from './components/DynamicProductForm.jsx'
-import { listBusinessCategoryMappings } from './services/businessCategoryMappingService.js'
+import AddMasterProductDialog from './components/AddMasterProductDialog.jsx'
 import { listProductTypeConfigs } from './services/productTypeConfigService.js'
 
+const PRODUCT_TABLE_COLUMNS = [
+  'Product Image',
+  'Product Name',
+  'Product ID',
+  'Business Type',
+  'Business Category',
+  'Product Type',
+  'Status',
+  'Actions',
+]
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  )
+}
+
+function PackageIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="56" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="56">
+      <path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" />
+      <path d="m3 8 9 5 9-5M12 13v8" />
+    </svg>
+  )
+}
+
 export default function MasterProductPage() {
+  const [search, setSearch] = useState('')
   const [businessTypes, setBusinessTypes] = useState([])
   const [productTypes, setProductTypes] = useState([])
-  const [mappings, setMappings] = useState([])
-  const [sourceLoading, setSourceLoading] = useState(true)
-  const [sourceError, setSourceError] = useState('')
-  const [sourceReload, setSourceReload] = useState(0)
+  const [optionsError, setOptionsError] = useState('')
   const [selectedBusinessTypeId, setSelectedBusinessTypeId] = useState('')
   const [categories, setCategories] = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(false)
-  const [categoriesError, setCategoriesError] = useState('')
-  const [categoryReload, setCategoryReload] = useState(0)
   const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState('')
   const [selectedProductTypeId, setSelectedProductTypeId] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
 
   useEffect(() => {
     let active = true
-    Promise.all([
-      listActiveBusinessTypes(),
-      listProductTypeConfigs(),
-      listBusinessCategoryMappings(),
-    ])
-      .then(([types, configuredProductTypes, categoryMappings]) => {
+    Promise.all([listActiveBusinessTypes(), listProductTypeConfigs()])
+      .then(([types, configuredProductTypes]) => {
         if (!active) return
         setBusinessTypes(types)
-        setProductTypes(configuredProductTypes)
-        setMappings(categoryMappings)
-        setSourceError('')
+        setProductTypes(configuredProductTypes.filter((productType) => productType.status === 'active'))
       })
       .catch((error) => {
-        if (active) setSourceError(error.message || 'Selection options could not be loaded.')
-      })
-      .finally(() => {
-        if (active) setSourceLoading(false)
+        if (active) setOptionsError(error.message || 'Filter options could not be loaded.')
       })
     return () => {
       active = false
     }
-  }, [sourceReload])
+  }, [])
 
   useEffect(() => {
     if (!selectedBusinessTypeId) return undefined
@@ -53,7 +69,7 @@ export default function MasterProductPage() {
         if (active) setCategories(records.filter((category) => category.active === true))
       })
       .catch((error) => {
-        if (active) setCategoriesError(error.message || 'Business Categories could not be loaded.')
+        if (active) setOptionsError(error.message || 'Business Categories could not be loaded.')
       })
       .finally(() => {
         if (active) setCategoriesLoading(false)
@@ -61,142 +77,107 @@ export default function MasterProductPage() {
     return () => {
       active = false
     }
-  }, [selectedBusinessTypeId, categoryReload])
-
-  const availableProductTypes = useMemo(() => {
-    if (!selectedBusinessTypeId || !selectedBusinessCategoryId) return []
-    const mappedIds = new Set(mappings
-      .filter((mapping) => mapping.status === 'active'
-        && mapping.businessTypeId === selectedBusinessTypeId
-        && mapping.businessCategoryId === selectedBusinessCategoryId)
-      .flatMap((mapping) => mapping.productTypeIds))
-    return productTypes.filter((productType) => productType.status === 'active' && mappedIds.has(productType.id))
-  }, [mappings, productTypes, selectedBusinessCategoryId, selectedBusinessTypeId])
-
-  const selectedBusinessType = businessTypes.find((type) => type.id === selectedBusinessTypeId)
-  const selectedBusinessCategory = categories.find((category) => category.id === selectedBusinessCategoryId)
-  const selectedProductType = availableProductTypes.find((productType) => productType.id === selectedProductTypeId)
+  }, [selectedBusinessTypeId])
 
   function handleBusinessTypeChange(event) {
     const businessTypeId = event.target.value
     setSelectedBusinessTypeId(businessTypeId)
     setSelectedBusinessCategoryId('')
-    setSelectedProductTypeId('')
     setCategories([])
-    setCategoriesError('')
     setCategoriesLoading(Boolean(businessTypeId))
   }
 
-  function handleBusinessCategoryChange(event) {
-    setSelectedBusinessCategoryId(event.target.value)
-    setSelectedProductTypeId('')
-  }
-
-  function retrySources() {
-    setSourceError('')
-    setSourceLoading(true)
-    setSourceReload((current) => current + 1)
-  }
-
-  function retryCategories() {
-    setCategoriesError('')
-    setCategoriesLoading(true)
-    setCategoryReload((current) => current + 1)
-  }
+  // Product rows are not loaded yet, so the table stays empty and these values only drive the UI.
+  const hasProducts = false
 
   return (
-    <section className="product-config-page dynamic-master-product-page" aria-labelledby="master-products-title">
-      <div className="dashboard-heading">
+    <section className="product-config-page master-product-page" aria-labelledby="master-products-title">
+      <div className="dashboard-heading master-product-heading">
         <div>
           <p className="eyebrow">DUKAN SETU / MASTER PRODUCTS</p>
           <h1 id="master-products-title">Master Products</h1>
-          <p className="dashboard-intro">Choose a Business Type, Business Category, and Product Type.</p>
+          <p className="dashboard-intro">Manage your master product catalog</p>
+        </div>
+        <div className="master-product-header-actions">
+          <button className="store-btn store-btn-approve" onClick={() => setAddOpen(true)} type="button">+ Add Product</button>
         </div>
       </div>
 
-      {sourceLoading ? (
-        <p className="store-state" role="status">Loading selection options...</p>
-      ) : sourceError ? (
-        <div className="store-state store-state-error" role="alert">
-          <p>Could not load selection options: {sourceError}</p>
-          <button className="store-btn" onClick={retrySources} type="button">Retry</button>
-        </div>
-      ) : (
-        <>
-          <div className="dynamic-master-product-selection">
-            <label className="dynamic-master-product-field">
-              <span>Business Type <span className="dynamic-master-product-required" aria-hidden="true">*</span></span>
-              <select
-                onChange={handleBusinessTypeChange}
-                required
-                value={selectedBusinessTypeId}
-              >
-                <option value="">Select a Business Type</option>
-                {businessTypes.map((businessType) => (
-                  <option key={businessType.id} value={businessType.id}>{businessType.name}</option>
-                ))}
-              </select>
-            </label>
-            {businessTypes.length === 0 && (
-              <p className="dynamic-master-product-note">No active Business Types are available.</p>
-            )}
+      {optionsError && <p className="store-feedback store-feedback-error" role="alert">{optionsError}</p>}
 
-            <label className="dynamic-master-product-field">
-              <span>Business Category <span className="dynamic-master-product-required" aria-hidden="true">*</span></span>
-              <select
-                disabled={!selectedBusinessTypeId || categoriesLoading || Boolean(categoriesError)}
-                onChange={handleBusinessCategoryChange}
-                required
-                value={selectedBusinessCategoryId}
-              >
-                <option value="">Select a Business Category</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name || category.id}</option>
-                ))}
-              </select>
-              {categoriesLoading && <span className="dynamic-master-product-note" role="status">Loading Business Categories...</span>}
-              {categoriesError && (
-                <span className="dynamic-master-product-inline-error" role="alert">
-                  {categoriesError} <button className="store-btn" onClick={retryCategories} type="button">Retry</button>
-                </span>
-              )}
-              {selectedBusinessTypeId && !categoriesLoading && !categoriesError && categories.length === 0 && (
-                <span className="dynamic-master-product-note">No active Business Categories are available for this Business Type.</span>
-              )}
-            </label>
-
-            <label className="dynamic-master-product-field">
-              <span>Product Type <span className="dynamic-master-product-required" aria-hidden="true">*</span></span>
-              <select
-                disabled={!selectedBusinessCategoryId || availableProductTypes.length === 0}
-                onChange={(event) => setSelectedProductTypeId(event.target.value)}
-                required
-                value={selectedProductTypeId}
-              >
-                <option value="">Select a Product Type</option>
-                {availableProductTypes.map((productType) => (
-                  <option key={productType.id} value={productType.id}>{productType.name}</option>
-                ))}
-              </select>
-              {selectedBusinessCategoryId && availableProductTypes.length === 0 && (
-                <span className="dynamic-master-product-note">No active Product Types are configured for this Business Category.</span>
-              )}
-            </label>
-          </div>
-
-          {selectedBusinessType && selectedBusinessCategory && selectedProductType && (
-            <section className="dynamic-master-product-confirmation" aria-labelledby="dynamic-master-product-selection-title">
-              <h2 id="dynamic-master-product-selection-title">Selection confirmed</h2>
-              <dl>
-                <div><dt>Business Type</dt><dd>{selectedBusinessType.name}</dd></div>
-                <div><dt>Business Category</dt><dd>{selectedBusinessCategory.name || selectedBusinessCategory.id}</dd></div>
-                <div><dt>Product Type</dt><dd>{selectedProductType.name}</dd></div>
-              </dl>
-              <DynamicProductForm key={selectedProductType.id} productTypeId={selectedProductType.id} />
-            </section>
+      <div className="master-product-toolbar">
+        <div className="master-product-search">
+          <SearchIcon />
+          <input
+            aria-label="Search products"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search products by name, product ID or barcode..."
+            type="search"
+            value={search}
+          />
+          {search && (
+            <button aria-label="Clear search" className="master-product-search-clear" onClick={() => setSearch('')} type="button">×</button>
           )}
-        </>
+        </div>
+
+        <label className="dynamic-master-product-field">
+          <span>Business Type</span>
+          <select onChange={handleBusinessTypeChange} value={selectedBusinessTypeId}>
+            <option value="">All Business Types</option>
+            {businessTypes.map((businessType) => (
+              <option key={businessType.id} value={businessType.id}>{businessType.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="dynamic-master-product-field">
+          <span>Business Category</span>
+          <select
+            disabled={!selectedBusinessTypeId || categoriesLoading}
+            onChange={(event) => setSelectedBusinessCategoryId(event.target.value)}
+            value={selectedBusinessCategoryId}
+          >
+            <option value="">All Business Categories</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>{category.name || category.id}</option>
+            ))}
+          </select>
+          {categoriesLoading && <span className="dynamic-master-product-note" role="status">Loading Business Categories...</span>}
+        </label>
+
+        <label className="dynamic-master-product-field">
+          <span>Product Type</span>
+          <select onChange={(event) => setSelectedProductTypeId(event.target.value)} value={selectedProductTypeId}>
+            <option value="">All Product Types</option>
+            {productTypes.map((productType) => (
+              <option key={productType.id} value={productType.id}>{productType.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="master-product-table-wrap">
+        <table className="master-product-table">
+          <thead>
+            <tr>
+              {PRODUCT_TABLE_COLUMNS.map((column) => (
+                <th key={column} scope="col">{column}</th>
+              ))}
+            </tr>
+          </thead>
+        </table>
+      </div>
+
+      {!hasProducts && (
+        <div className="master-product-empty">
+          <PackageIcon />
+          <h2>No Products Yet</h2>
+          <p>Your master product catalog is empty. Add your first product to get started.</p>
+          <button className="store-btn store-btn-approve" onClick={() => setAddOpen(true)} type="button">+ Add First Product</button>
+        </div>
       )}
+
+      {addOpen && <AddMasterProductDialog onClose={() => setAddOpen(false)} />}
     </section>
   )
 }

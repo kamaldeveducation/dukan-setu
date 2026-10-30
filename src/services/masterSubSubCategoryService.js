@@ -3,9 +3,11 @@ import {
 	doc,
 	getDoc,
 	getDocs,
+	query,
 	runTransaction,
 	serverTimestamp,
 	updateDoc,
+	where,
 } from 'firebase/firestore'
 import { deleteObject, getBytes, getDownloadURL, ref as storageRef, uploadBytes, uploadBytesResumable } from 'firebase/storage'
 import { auth, db, storage } from '../firebase'
@@ -198,6 +200,24 @@ export async function listMasterSubSubCategories() {
 	return snapshot.docs.map(normalizeSubSubCategory).sort((left, right) => (
 		Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) || String(left.name).localeCompare(String(right.name))
 	))
+}
+
+// Targeted read: active sub-subcategories under one Master Sub Category. Records written before
+// `parentId` existed only carry `parentMasterSubCategoryId`, so both fields are queried and merged.
+export async function listSubSubCategoriesByParent(parentSubCategoryId) {
+	const [byParentId, byLegacyParentId] = await Promise.all([
+		getDocs(query(subSubCategoriesRef, where('parentId', '==', parentSubCategoryId))),
+		getDocs(query(subSubCategoriesRef, where('parentMasterSubCategoryId', '==', parentSubCategoryId))),
+	])
+	const byId = new Map()
+	;[...byParentId.docs, ...byLegacyParentId.docs].forEach((snapshot) => {
+		byId.set(snapshot.id, normalizeSubSubCategory(snapshot))
+	})
+	return [...byId.values()]
+		.filter((record) => record.active === true)
+		.sort((left, right) => (
+			Number(left.sortOrder ?? 0) - Number(right.sortOrder ?? 0) || String(left.name).localeCompare(String(right.name))
+		))
 }
 
 export async function listSubSubCategoryOptions() {
