@@ -152,6 +152,8 @@
 .master-category-image-details { display: grid; min-width: 0; gap: 7px; }
 .master-category-image-details small { color: #718075; font-size: 11px; }
 .master-category-image-details .store-actions { justify-content: flex-start; margin: 0; }
+.master-category-image-list { display: grid; gap: 12px; margin-top: 12px; }
+.master-category-image-list:empty { display: none; }
 .master-category-image-error { color: #a43d31; font-size: 12px; }
 
 .master-category-crop-backdrop {

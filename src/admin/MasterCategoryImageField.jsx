@@ -7,8 +7,9 @@ const DEFAULT_MAX_BYTES = 102400
 const DEFAULT_MIN_ZOOM_RATIO = 0.1
 const QUALITIES = [0.9, 0.78, 0.66, 0.54, 0.42, 0.3]
 const SCALES = [1, 0.82, 0.68, 0.54, 0.4, 0.28]
+export const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif'
 
-async function detectImageFormat(file) {
+export async function detectImageFormat(file) {
   const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer())
   const startsWith = (...signature) => signature.every((byte, index) => bytes[index] === byte)
   if (startsWith(0xff, 0xd8, 0xff)) return 'jpeg'
@@ -74,6 +75,9 @@ export default function MasterCategoryImageField({
   maxBytes = DEFAULT_MAX_BYTES,
   minZoomRatio = DEFAULT_MIN_ZOOM_RATIO,
   enableCamera = false,
+  listItem = false,
+  initialFile = null,
+  onEditorClose,
 }) {
   const inputId = useId()
   const fileInputRef = useRef(null)
@@ -140,6 +144,12 @@ export default function MasterCategoryImageField({
     return url
   }
 
+  // In list mode the parent owns the preview URL of a finished crop, so this component must not revoke it on unmount.
+  function handOff(asset) {
+    if (listItem) objectUrlsRef.current.delete(asset.previewUrl)
+    onChange(asset)
+  }
+
   function revokeObjectUrl(url) {
     if (!url || !objectUrlsRef.current.delete(url)) return
     URL.revokeObjectURL(url)
@@ -150,6 +160,10 @@ export default function MasterCategoryImageField({
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
+    loadFile(file)
+  }
+
+  async function loadFile(file) {
     setError('')
     try {
       const detectedFormat = await detectImageFormat(file)
@@ -166,11 +180,18 @@ export default function MasterCategoryImageField({
     }
   }
 
+  useEffect(() => {
+    if (initialFile) loadFile(initialFile)
+    // Each queued file mounts its own instance with a fixed initialFile, so it should load only on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function closeEditor() {
     if (processing) return
     revokeObjectUrl(processedAsset?.previewUrl)
     setProcessedAsset(null)
     setEditorOpen(false)
+    onEditorClose?.()
   }
 
   function openCropEditor() {
@@ -207,7 +228,7 @@ export default function MasterCategoryImageField({
       if (showCompressedInCropper) {
         setProcessedAsset(asset)
       } else {
-        onChange(asset)
+        handOff(asset)
         setEditorOpen(false)
       }
     } catch (imageError) {
@@ -227,7 +248,7 @@ export default function MasterCategoryImageField({
   function useProcessedCrop() {
     if (!processedAsset) return
     revokeObjectUrl(imageAsset?.previewUrl)
-    onChange(processedAsset)
+    handOff(processedAsset)
     setProcessedAsset(null)
     setEditorOpen(false)
   }
@@ -250,29 +271,31 @@ export default function MasterCategoryImageField({
 
   const previewUrl = imageAsset?.previewUrl || savedUrl
 
-  const acceptedTypes = 'image/jpeg,image/png,image/webp,image/bmp,image/gif,.jpg,.jpeg,.png,.webp,.bmp,.gif'
-
   return (
     <div className="master-category-image-field">
-      <label htmlFor={inputId}>{imageLabel}</label>
-      <input
-        accept={acceptedTypes}
-        className="master-category-file-input"
-        id={inputId}
-        onChange={chooseFile}
-        ref={fileInputRef}
-        type="file"
-      />
-      {enableCamera && (
-        <input
-          accept="image/*"
-          capture="environment"
-          className="master-category-file-input"
-          aria-label={`${imageLabel} camera capture`}
-          onChange={chooseFile}
-          ref={cameraInputRef}
-          type="file"
-        />
+      {!listItem && (
+        <>
+          <label htmlFor={inputId}>{imageLabel}</label>
+          <input
+            accept={ACCEPTED_IMAGE_TYPES}
+            className="master-category-file-input"
+            id={inputId}
+            onChange={chooseFile}
+            ref={fileInputRef}
+            type="file"
+          />
+          {enableCamera && (
+            <input
+              accept="image/*"
+              capture="environment"
+              className="master-category-file-input"
+              aria-label={`${imageLabel} camera capture`}
+              onChange={chooseFile}
+              ref={cameraInputRef}
+              type="file"
+            />
+          )}
+        </>
       )}
       <div className="master-category-image-row">
         {previewUrl ? (
@@ -290,12 +313,14 @@ export default function MasterCategoryImageField({
             <small>{savedUrl ? 'Current category image' : 'No image selected'}</small>
           )}
           <div className="store-actions">
-            {enableCamera && (
+            {!listItem && enableCamera && (
               <button className="store-btn" onClick={() => cameraInputRef.current?.click()} type="button">Open Camera</button>
             )}
-            <button className="store-btn" onClick={() => fileInputRef.current?.click()} type="button">
-              {enableCamera ? 'Gallery' : previewUrl ? 'Change Image' : 'Upload Image'}
-            </button>
+            {!listItem && (
+              <button className="store-btn" onClick={() => fileInputRef.current?.click()} type="button">
+                {enableCamera ? 'Gallery' : previewUrl ? 'Change Image' : 'Upload Image'}
+              </button>
+            )}
             {(source || imageAsset) && <button className="store-btn" onClick={openCropEditor} type="button">Crop Image</button>}
             {previewUrl && <button className="store-btn" onClick={removeImage} type="button">Remove Image</button>}
           </div>
