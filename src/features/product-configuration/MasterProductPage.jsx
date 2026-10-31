@@ -3,6 +3,7 @@ import { listBusinessCategories } from '../../services/businessCategoryService.j
 import { listActiveBusinessTypes } from '../../services/businessTypeService.js'
 import AddMasterProductDialog from './components/AddMasterProductDialog.jsx'
 import { listProductTypeConfigs } from './services/productTypeConfigService.js'
+import { deleteMasterProduct, listMasterProducts } from './services/masterProductService.js'
 
 const PRODUCT_TABLE_COLUMNS = [
   'Product Image',
@@ -11,7 +12,6 @@ const PRODUCT_TABLE_COLUMNS = [
   'Business Type',
   'Business Category',
   'Product Type',
-  'Status',
   'Actions',
 ]
 
@@ -20,6 +20,25 @@ function SearchIcon() {
     <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" />
+    </svg>
+  )
+}
+
+function EditIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M6 6l1 14h10l1-14" />
     </svg>
   )
 }
@@ -33,8 +52,72 @@ function PackageIcon() {
   )
 }
 
+function productIdOf(product) {
+  return product.product_id || product.documentId || ''
+}
+
+function productImageUrl(product) {
+  const first = Array.isArray(product.product_photo) ? product.product_photo[0] : null
+  return typeof first?.url === 'string' ? first.url : ''
+}
+
+// Saved name first, then saved ID, so older documents without metadata still display.
+function labelFor(name, id) {
+  return name || id || '—'
+}
+
+function matchesSearch(product, query) {
+  if (!query) return true
+  return [product.product_name, productIdOf(product), product.barcode]
+    .some((value) => String(value ?? '').toLowerCase().includes(query))
+}
+
+// Confirmation for deleting a product. Cancel closes without changes; Confirm stays disabled while the delete runs.
+function DeleteMasterProductDialog({ product, busy, error, onCancel, onConfirm }) {
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === 'Escape' && !busy) onCancel()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [busy, onCancel])
+
+  const name = product.product_name || '—'
+  const id = productIdOf(product)
+  return (
+    <div className="master-product-dialog-backdrop" onClick={busy ? undefined : onCancel} role="presentation">
+      <section
+        aria-describedby="delete-master-product-text"
+        aria-labelledby="delete-master-product-title"
+        aria-modal="true"
+        className="master-product-dialog master-product-confirm"
+        onClick={(event) => event.stopPropagation()}
+        role="alertdialog"
+      >
+        <h2 id="delete-master-product-title">Delete Product?</h2>
+        <p id="delete-master-product-text">
+          Product Name: <strong>{name}</strong><br />
+          Product ID: <strong>{id}</strong>
+        </p>
+        <p>The product document and its saved images will be permanently deleted. This cannot be undone.</p>
+        {error && <p className="store-state store-state-error" role="alert">{error}</p>}
+        <div className="store-actions">
+          <button className="store-btn" disabled={busy} onClick={onCancel} type="button">Cancel</button>
+          <button className="store-btn store-btn-reject" disabled={busy} onClick={onConfirm} type="button">
+            {busy ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function MasterProductPage() {
   const [search, setSearch] = useState('')
+  const [products, setProducts] = useState([])
+  const [productsLoading, setProductsLoading] = useState(true)
+  const [productsError, setProductsError] = useState('')
+  const [productsReload, setProductsReload] = useState(0)
   const [businessTypes, setBusinessTypes] = useState([])
   const [productTypes, setProductTypes] = useState([])
   const [optionsError, setOptionsError] = useState('')
@@ -44,6 +127,11 @@ export default function MasterProductPage() {
   const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState('')
   const [selectedProductTypeId, setSelectedProductTypeId] = useState('')
   const [addOpen, setAddOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
 
   useEffect(() => {
     let active = true
@@ -79,6 +167,31 @@ export default function MasterProductPage() {
     }
   }, [selectedBusinessTypeId])
 
+  useEffect(() => {
+    let active = true
+    listMasterProducts()
+      .then((records) => {
+        if (!active) return
+        setProducts(records)
+        setProductsError('')
+      })
+      .catch((error) => {
+        if (active) setProductsError(error.message || 'Products could not be loaded.')
+      })
+      .finally(() => {
+        if (active) setProductsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [productsReload])
+
+  function reloadProducts() {
+    setProductsLoading(true)
+    setProductsError('')
+    setProductsReload((count) => count + 1)
+  }
+
   function handleBusinessTypeChange(event) {
     const businessTypeId = event.target.value
     setSelectedBusinessTypeId(businessTypeId)
@@ -87,8 +200,62 @@ export default function MasterProductPage() {
     setCategoriesLoading(Boolean(businessTypeId))
   }
 
-  // Product rows are not loaded yet, so the table stays empty and these values only drive the UI.
-  const hasProducts = false
+  function openAddDialog() {
+    setActionMessage('')
+    setEditingProduct(null)
+    setAddOpen(true)
+  }
+
+  function openEditDialog(product) {
+    setActionMessage('')
+    setEditingProduct(product)
+    setAddOpen(true)
+  }
+
+  function closeProductDialog() {
+    setAddOpen(false)
+    setEditingProduct(null)
+  }
+
+  function handleProductSaved(result) {
+    closeProductDialog()
+    setActionMessage(`Product ${result.productId} ${result.created ? 'saved' : 'updated'} successfully.`)
+    reloadProducts()
+  }
+
+  function openDeleteDialog(product) {
+    setActionMessage('')
+    setDeleteError('')
+    setDeleteTarget(product)
+  }
+
+  function closeDeleteDialog() {
+    if (deleting) return
+    setDeleteTarget(null)
+    setDeleteError('')
+  }
+
+  async function confirmDelete() {
+    if (deleting || !deleteTarget) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await deleteMasterProduct({ documentId: deleteTarget.documentId })
+      setActionMessage(`Product ${productIdOf(deleteTarget)} deleted successfully.`)
+      setDeleteTarget(null)
+      reloadProducts()
+    } catch (error) {
+      setDeleteError(error.message || 'The product could not be deleted.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const query = search.trim().toLowerCase()
+  const visibleProducts = products.filter((product) => matchesSearch(product, query)
+    && (!selectedBusinessTypeId || product.businessTypeId === selectedBusinessTypeId)
+    && (!selectedBusinessCategoryId || product.businessCategoryId === selectedBusinessCategoryId)
+    && (!selectedProductTypeId || product.productTypeId === selectedProductTypeId))
 
   return (
     <section className="product-config-page master-product-page" aria-labelledby="master-products-title">
@@ -99,7 +266,7 @@ export default function MasterProductPage() {
           <p className="dashboard-intro">Manage your master product catalog</p>
         </div>
         <div className="master-product-header-actions">
-          <button className="store-btn store-btn-approve" onClick={() => setAddOpen(true)} type="button">+ Add Product</button>
+          <button className="store-btn store-btn-approve" onClick={openAddDialog} type="button">+ Add Product</button>
         </div>
       </div>
 
@@ -156,6 +323,9 @@ export default function MasterProductPage() {
         </label>
       </div>
 
+      {productsError && <p className="store-feedback store-feedback-error" role="alert">{productsError}</p>}
+      {actionMessage && <p className="store-feedback" role="status">{actionMessage}</p>}
+
       <div className="master-product-table-wrap">
         <table className="master-product-table">
           <thead>
@@ -165,19 +335,84 @@ export default function MasterProductPage() {
               ))}
             </tr>
           </thead>
+          <tbody>
+            {productsLoading && (
+              <tr><td className="master-product-table-message" colSpan={PRODUCT_TABLE_COLUMNS.length} role="status">Loading products...</td></tr>
+            )}
+            {!productsLoading && products.length > 0 && visibleProducts.length === 0 && (
+              <tr><td className="master-product-table-message" colSpan={PRODUCT_TABLE_COLUMNS.length}>No products match the current search or filters.</td></tr>
+            )}
+            {visibleProducts.map((product) => {
+              const imageUrl = productImageUrl(product)
+              return (
+                <tr key={product.documentId}>
+                  <td>
+                    {imageUrl
+                      ? <img alt="" className="master-product-thumb" loading="lazy" src={imageUrl} />
+                      : <span className="master-product-thumb master-product-thumb-placeholder" aria-label="No image">No image</span>}
+                  </td>
+                  <td>{product.product_name || '—'}</td>
+                  <td>{productIdOf(product)}</td>
+                  <td>{labelFor(product.businessTypeName, product.businessTypeId)}</td>
+                  <td>{labelFor(product.businessCategoryName, product.businessCategoryId)}</td>
+                  <td>{labelFor(product.productTypeName, product.productTypeId)}</td>
+                  <td>
+                    <div className="master-product-actions">
+                      <button
+                        aria-label={`Edit ${product.product_name || productIdOf(product)}`}
+                        className="master-product-icon-btn"
+                        disabled={deleting}
+                        onClick={() => openEditDialog(product)}
+                        title="Edit product"
+                        type="button"
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        aria-label={`Delete ${product.product_name || productIdOf(product)}`}
+                        className="master-product-icon-btn master-product-icon-btn-danger"
+                        disabled={deleting}
+                        onClick={() => openDeleteDialog(product)}
+                        title="Delete product"
+                        type="button"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
         </table>
       </div>
 
-      {!hasProducts && (
+      {!productsLoading && !productsError && products.length === 0 && (
         <div className="master-product-empty">
           <PackageIcon />
           <h2>No Products Yet</h2>
           <p>Your master product catalog is empty. Add your first product to get started.</p>
-          <button className="store-btn store-btn-approve" onClick={() => setAddOpen(true)} type="button">+ Add First Product</button>
+          <button className="store-btn store-btn-approve" onClick={openAddDialog} type="button">+ Add First Product</button>
         </div>
       )}
 
-      {addOpen && <AddMasterProductDialog onClose={() => setAddOpen(false)} />}
+      {addOpen && (
+        <AddMasterProductDialog
+          key={editingProduct?.documentId ?? 'new'}
+          onClose={closeProductDialog}
+          onSaved={handleProductSaved}
+          product={editingProduct}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteMasterProductDialog
+          busy={deleting}
+          error={deleteError}
+          onCancel={closeDeleteDialog}
+          onConfirm={confirmDelete}
+          product={deleteTarget}
+        />
+      )}
     </section>
   )
 }

@@ -6,20 +6,44 @@ import { listProductTypeConfigs } from '../services/productTypeConfigService.js'
 import DynamicProductForm from './DynamicProductForm.jsx'
 import MasterCategorySelection from './MasterCategorySelection.jsx'
 
-export default function AddMasterProductDialog({ onClose }) {
+const EMPTY_MASTER_SELECTION = {
+  masterCategoryId: '',
+  masterCategoryName: '',
+  subCategoryId: '',
+  subCategoryName: '',
+  subSubCategoryId: '',
+  subSubCategoryName: '',
+}
+
+function masterSelectionOf(product) {
+  if (!product) return EMPTY_MASTER_SELECTION
+  return {
+    masterCategoryId: product.masterCategoryId ?? '',
+    masterCategoryName: product.masterCategoryName ?? '',
+    subCategoryId: product.masterSubCategoryId ?? '',
+    subCategoryName: product.masterSubCategoryName ?? '',
+    subSubCategoryId: product.masterSubSubCategoryId ?? '',
+    subSubCategoryName: product.masterSubSubCategoryName ?? '',
+  }
+}
+
+// product: a saved master product in edit mode; omitted when adding a new product.
+export default function AddMasterProductDialog({ onClose, onSaved, product }) {
+  const isEditing = Boolean(product)
   const [businessTypes, setBusinessTypes] = useState([])
   const [productTypes, setProductTypes] = useState([])
   const [mappings, setMappings] = useState([])
   const [sourceLoading, setSourceLoading] = useState(true)
   const [sourceError, setSourceError] = useState('')
   const [sourceReload, setSourceReload] = useState(0)
-  const [selectedBusinessTypeId, setSelectedBusinessTypeId] = useState('')
+  const [selectedBusinessTypeId, setSelectedBusinessTypeId] = useState(product?.businessTypeId ?? '')
   const [categories, setCategories] = useState([])
-  const [categoriesLoading, setCategoriesLoading] = useState(false)
+  const [categoriesLoading, setCategoriesLoading] = useState(Boolean(product?.businessTypeId))
   const [categoriesError, setCategoriesError] = useState('')
   const [categoryReload, setCategoryReload] = useState(0)
-  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState('')
-  const [selectedProductTypeId, setSelectedProductTypeId] = useState('')
+  const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState(product?.businessCategoryId ?? '')
+  const [selectedProductTypeId, setSelectedProductTypeId] = useState(product?.productTypeId ?? '')
+  const [masterSelection, setMasterSelection] = useState(() => masterSelectionOf(product))
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -91,6 +115,7 @@ export default function AddMasterProductDialog({ onClose }) {
     setSelectedBusinessTypeId(businessTypeId)
     setSelectedBusinessCategoryId('')
     setSelectedProductTypeId('')
+    setMasterSelection(EMPTY_MASTER_SELECTION)
     setCategories([])
     setCategoriesError('')
     setCategoriesLoading(Boolean(businessTypeId))
@@ -99,6 +124,7 @@ export default function AddMasterProductDialog({ onClose }) {
   function handleBusinessCategoryChange(event) {
     setSelectedBusinessCategoryId(event.target.value)
     setSelectedProductTypeId('')
+    setMasterSelection(EMPTY_MASTER_SELECTION)
   }
 
   function retrySources() {
@@ -124,7 +150,7 @@ export default function AddMasterProductDialog({ onClose }) {
       >
         <div className="master-product-dialog-head">
           <div>
-            <h2 id="add-master-product-title">Add Product</h2>
+            <h2 id="add-master-product-title">{isEditing ? 'Edit Product' : 'Add Product'}</h2>
             <p className="dashboard-intro">Choose a Business Type, Business Category, and Product Type.</p>
           </div>
           <button aria-label="Close" className="store-btn" onClick={onClose} type="button">×</button>
@@ -204,6 +230,10 @@ export default function AddMasterProductDialog({ onClose }) {
               key={`${selectedBusinessTypeId}:${selectedBusinessCategoryId}`}
               businessCategoryId={selectedBusinessCategoryId}
               businessTypeId={selectedBusinessTypeId}
+              initialMasterCategoryId={masterSelection.masterCategoryId}
+              initialSubCategoryId={masterSelection.subCategoryId}
+              initialSubSubCategoryId={masterSelection.subSubCategoryId}
+              onSelectionChange={setMasterSelection}
             />
 
             {selectedBusinessType && selectedBusinessCategory && selectedProductType && (
@@ -214,7 +244,23 @@ export default function AddMasterProductDialog({ onClose }) {
                   <div><dt>Business Category</dt><dd>{selectedBusinessCategory.name || selectedBusinessCategory.id}</dd></div>
                   <div><dt>Product Type</dt><dd>{selectedProductType.name}</dd></div>
                 </dl>
-                <DynamicProductForm key={selectedProductType.id} productTypeId={selectedProductType.id} />
+                <DynamicProductForm
+                  key={selectedProductType.id}
+                  editingProductId={product?.documentId}
+                  initialData={product}
+                  onSaved={onSaved}
+                  productTypeId={selectedProductType.id}
+                  selection={{
+                    businessTypeId: selectedBusinessTypeId,
+                    businessTypeName: selectedBusinessType.name,
+                    businessCategoryId: selectedBusinessCategoryId,
+                    businessCategoryName: selectedBusinessCategory.name,
+                    productTypeId: selectedProductType.id,
+                    productTypeName: selectedProductType.name,
+                    ...masterSelection,
+                  }}
+                />
+
               </section>
             )}
           </>

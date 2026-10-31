@@ -871,6 +871,58 @@
   border-bottom: 1px solid #e0e5dc;
 }
 
+.master-product-table td {
+  padding: 10px 12px;
+  color: #24372f;
+  border-bottom: 1px solid #eef2ec;
+  vertical-align: middle;
+}
+
+.master-product-table-message { text-align: center; color: #52705b; }
+
+.master-product-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.master-product-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #2f6b49;
+  border: 1px solid #cbd8c6;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.master-product-icon-btn:hover:not(:disabled) { background: #f1f5ef; }
+
+.master-product-icon-btn-danger { color: #9b2c2c; border-color: #e0b4b4; }
+
+.master-product-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.master-product-confirm { max-width: 440px; }
+
+.master-product-thumb {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border: 1px solid #e0e5dc;
+  border-radius: 4px;
+}
+
+.master-product-thumb-placeholder {
+  display: grid;
+  place-items: center;
+  background: #f6f9f4;
+  color: #52705b;
+  font-size: 10px;
+}
+
 .master-product-empty {
   display: grid;
   justify-items: center;

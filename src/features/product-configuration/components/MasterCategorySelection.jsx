@@ -6,6 +6,10 @@ import HierarchicalImageSelect from './HierarchicalImageSelect.jsx'
 
 const EMPTY_VIEW = { status: 'idle', items: [], error: '' }
 
+function labelOf(items, id) {
+  return items.find((item) => item.id === id)?.name ?? ''
+}
+
 // Master Categories keep their image in logoUrl/logoRefs; Sub Categories and Sub-Subcategories use imageUrl.
 // Code and document ID are extra search terms; the visible name is always searched.
 function toOption(item) {
@@ -52,10 +56,17 @@ function useChildOptions(key, load) {
   return { view, retry }
 }
 
-export default function MasterCategorySelection({ businessTypeId, businessCategoryId }) {
-  const [masterCategoryId, setMasterCategoryId] = useState('')
-  const [subCategoryId, setSubCategoryId] = useState('')
-  const [subSubCategoryId, setSubSubCategoryId] = useState('')
+export default function MasterCategorySelection({
+  businessTypeId,
+  businessCategoryId,
+  initialMasterCategoryId = '',
+  initialSubCategoryId = '',
+  initialSubSubCategoryId = '',
+  onSelectionChange,
+}) {
+  const [masterCategoryId, setMasterCategoryId] = useState(initialMasterCategoryId)
+  const [subCategoryId, setSubCategoryId] = useState(initialSubCategoryId)
+  const [subSubCategoryId, setSubSubCategoryId] = useState(initialSubSubCategoryId)
 
   const masterCategories = useChildOptions(
     businessCategoryId ? `${businessTypeId}:${businessCategoryId}` : '',
@@ -64,19 +75,46 @@ export default function MasterCategorySelection({ businessTypeId, businessCatego
   const subCategories = useChildOptions(masterCategoryId, () => listMasterSubCategoriesByParent(masterCategoryId))
   const subSubCategories = useChildOptions(subCategoryId, () => listSubSubCategoriesByParent(subCategoryId))
 
+  function reportSelection(next) {
+    onSelectionChange?.({
+      masterCategoryId: '',
+      masterCategoryName: '',
+      subCategoryId: '',
+      subCategoryName: '',
+      subSubCategoryId: '',
+      subSubCategoryName: '',
+      ...next,
+    })
+  }
+
   function handleMasterCategoryChange(nextValue) {
     setMasterCategoryId(nextValue)
     setSubCategoryId('')
     setSubSubCategoryId('')
+    reportSelection({ masterCategoryId: nextValue, masterCategoryName: labelOf(masterCategories.view.items, nextValue) })
   }
 
   function handleSubCategoryChange(nextValue) {
     setSubCategoryId(nextValue)
     setSubSubCategoryId('')
+    reportSelection({
+      masterCategoryId,
+      masterCategoryName: labelOf(masterCategories.view.items, masterCategoryId),
+      subCategoryId: nextValue,
+      subCategoryName: labelOf(subCategories.view.items, nextValue),
+    })
   }
 
   function handleSubSubCategoryChange(nextValue) {
     setSubSubCategoryId(nextValue)
+    reportSelection({
+      masterCategoryId,
+      masterCategoryName: labelOf(masterCategories.view.items, masterCategoryId),
+      subCategoryId,
+      subCategoryName: labelOf(subCategories.view.items, subCategoryId),
+      subSubCategoryId: nextValue,
+      subSubCategoryName: labelOf(subSubCategories.view.items, nextValue),
+    })
   }
 
   const masterCategoryView = masterCategories.view

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadActiveFormForProductType } from '../services/productFormConfigService.js'
+import { saveMasterProduct } from '../services/masterProductService.js'
 import ImageFormField from './ImageFormField.jsx'
 
 const INPUT_TYPES = {
@@ -56,8 +57,30 @@ function validateValue(field, value) {
   return ''
 }
 
-function FieldInput({ field, value, onChange, onBlur, describedBy }) {
-  const common = { id: `dpf-${field.id}`, name: field.key, 'aria-describedby': describedBy, onBlur }
+function extensionOf(storagePath) {
+  const name = String(storagePath ?? '')
+  const dot = name.lastIndexOf('.')
+  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase()
+}
+
+// Saved images carry url and storagePath only. previewUrl is the saved URL, so the crop editor can show it without a blob.
+function savedImageItems(items) {
+  return items.map((item, index) => ({
+    id: `saved-${index}`,
+    order: index,
+    url: item.url,
+    previewUrl: item.url,
+    storagePath: item.storagePath,
+    contentType: item.contentType,
+    extension: extensionOf(item.storagePath),
+    width: item.width,
+    height: item.height,
+    size: item.size,
+  }))
+}
+
+function FieldInput({ field, value, onChange, onBlur, describedBy, disabled }) {
+  const common = { id: `dpf-${field.id}`, name: field.key, 'aria-describedby': describedBy, onBlur, disabled }
   const { validation } = field
   if (field.type === 'textarea') {
     return <textarea {...common} maxLength={validation.maxLength} minLength={validation.minLength} onChange={(e) => onChange(e.target.value)} rows={3} value={value ?? ''} />
@@ -117,11 +140,16 @@ function FieldInput({ field, value, onChange, onBlur, describedBy }) {
   )
 }
 
-export default function DynamicProductForm({ productTypeId }) {
+// initialData: saved product document in edit mode; its values are prefilled once the form layout is ready.
+// editingProductId: set in edit mode; the Product ID is locked because it is the document ID.
+export default function DynamicProductForm({ productTypeId, selection, onSaved, initialData, editingProductId }) {
   const [state, setState] = useState({ productTypeId: '', loading: true, error: '', data: null })
   const [reload, setReload] = useState(0)
   const [values, setValues] = useState({})
   const [touched, setTouched] = useState({})
+  const [saveState, setSaveState] = useState({ status: 'idle', message: '' })
+  const savingRef = useRef(false)
+  const prefilledRef = useRef(false)
 
   useEffect(() => {
     let active = true
@@ -140,9 +168,45 @@ export default function DynamicProductForm({ productTypeId }) {
     .map((group) => ({ ...group, fields: group.fields.filter((field) => !field.hidden) }))
     .filter((group) => group.fields.length > 0)
 
+  useEffect(() => {
+    if (!initialData || prefilledRef.current || layout.length === 0) return
+    prefilledRef.current = true
+    const prefilled = {}
+    for (const group of layout) {
+      for (const field of group.fields) {
+        const saved = initialData[field.key]
+        if (saved === undefined || saved === null) continue
+        prefilled[field.id] = field.type === 'image' && Array.isArray(saved) ? savedImageItems(saved) : saved
+      }
+    }
+    setValues(prefilled)
+  }, [initialData, layout])
+
   function retry() {
     setState({ productTypeId: '', loading: true, error: '', data: null })
     setReload((count) => count + 1)
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (savingRef.current) return
+    const allFields = visibleGroups.flatMap((group) => group.fields)
+    setTouched((prev) => ({ ...prev, ...Object.fromEntries(allFields.map((field) => [field.id, true])) }))
+    if (allFields.some((field) => validateValue(field, values[field.id]))) {
+      setSaveState({ status: 'error', message: 'Fix the highlighted fields before saving.' })
+      return
+    }
+    savingRef.current = true
+    setSaveState({ status: 'saving', message: '' })
+    try {
+      const result = await saveMasterProduct({ fields: allFields, values, selection, editingProductId })
+      setSaveState({ status: 'success', message: `Product ${result.productId} ${result.created ? 'saved' : 'updated'} successfully.` })
+      onSaved?.(result)
+    } catch (error) {
+      setSaveState({ status: 'error', message: error.message || 'The product could not be saved.' })
+    } finally {
+      savingRef.current = false
+    }
   }
 
   if (current.loading) return <p className="store-state" role="status">Loading Product Form...</p>
@@ -165,7 +229,7 @@ export default function DynamicProductForm({ productTypeId }) {
   }
 
   return (
-    <form className="dynamic-product-form" noValidate onSubmit={(event) => event.preventDefault()} aria-label={current.data.config.name || 'Product Form'}>
+    <form className="dynamic-product-form" noValidate onSubmit={handleSubmit} aria-label={current.data.config.name || 'Product Form'}>
       {visibleGroups.map((group) => (
         <fieldset className="dynamic-product-form-group" key={group.id}>
           <legend>{group.name}</legend>
@@ -180,6 +244,7 @@ export default function DynamicProductForm({ productTypeId }) {
                   </label>
                   <FieldInput
                     describedBy={`dpf-${field.id}-note`}
+                    disabled={Boolean(editingProductId) && field.key === 'product_id'}
                     field={field}
                     onBlur={() => setTouched((prev) => ({ ...prev, [field.id]: true }))}
                     onChange={(next) => {
@@ -197,6 +262,16 @@ export default function DynamicProductForm({ productTypeId }) {
           </div>
         </fieldset>
       ))}
+      <div className="store-actions">
+        <button className="store-btn store-btn-approve" disabled={saveState.status === 'saving'} type="submit">
+          {saveState.status === 'saving' ? 'Saving...' : 'Save Product'}
+        </button>
+      </div>
+      {saveState.message && (
+        <p className={saveState.status === 'error' ? 'store-state store-state-error' : 'store-state'} role={saveState.status === 'error' ? 'alert' : 'status'}>
+          {saveState.message}
+        </p>
+      )}
     </form>
   )
 }
