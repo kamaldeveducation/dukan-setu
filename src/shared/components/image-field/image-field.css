@@ -1,0 +1,42 @@
+.master-category-crop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgb(20 35 28 / 68%);
+}
+.master-category-crop-dialog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: min(760px, 100%);
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  gap: 12px;
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 4px;
+  background: #fff;
+}
+.master-category-crop-dialog h3 { margin: 0; color: #20372c; font-size: 18px; }
+.master-category-crop-stage { height: min(56vh, 520px); height: min(56dvh, 520px); min-height: 220px; overflow: hidden; background: #17251f; touch-action: none; }
+.master-category-crop-stage img { display: block; max-width: 100%; }
+.master-category-crop-stage .cropper-container { width: 100%; height: 100%; touch-action: none; }
+.master-category-crop-controls { display: flex; flex-wrap: wrap; gap: 7px; }
+.master-category-crop-controls .active { border-color: #2f6b49; color: #fff; background: #2f6b49; }
+.master-category-compressed-result { min-width: 0; }
+.master-category-compressed-result img { display: block; width: auto; max-width: 100%; height: auto; max-height: 180px; margin: 0 0 6px; object-fit: contain; }
+.master-category-compressed-result p { margin: 0; overflow-wrap: anywhere; }
+.master-category-gif-note { color: #718075; font-size: 12px; }
+.master-category-crop-dialog > .store-actions { justify-content: flex-end; margin: 0; }
+
+@media (max-width: 520px) {
+  .master-category-crop-dialog { padding: 12px; gap: 10px; }
+  .master-category-crop-stage { height: clamp(180px, 42vh, 420px); height: clamp(180px, 42dvh, 420px); min-height: 180px; }
+  .master-category-crop-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+  .master-category-crop-controls .store-btn { min-height: 36px; padding: 6px 8px; }
+  .master-category-compressed-result img { max-height: 140px; }
+  .master-category-crop-dialog > .store-actions { flex-wrap: wrap; }
+  .master-category-crop-dialog > .store-actions .store-btn { flex: 1 1 auto; }
+}

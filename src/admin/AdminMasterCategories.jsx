@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import MasterCategoryImageField from './MasterCategoryImageField.jsx'
+import MasterCategoryImageField from '../shared/components/image-field/ImageCropEditor.jsx'
 import {
   MAX_MASTER_CATEGORY_LEVEL,
   createMasterCategory,

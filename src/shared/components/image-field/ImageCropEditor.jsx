@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
+import './image-field.css'
 
 const DEFAULT_MAX_BYTES = 102400
 // Lowest zoom ratio (relative to the image's natural size) the cropper allows.
@@ -63,7 +64,7 @@ async function compressCanvas(sourceCanvas, webpOnly, maxBytes) {
   throw new Error(`This crop could not be compressed below ${formatLimit(maxBytes)}. Try a smaller crop or a simpler image.`)
 }
 
-export default function MasterCategoryImageField({
+export default function ImageCropEditor({
   savedUrl = '',
   imageAsset,
   onChange,

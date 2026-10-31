@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import MasterCategoryImageField, { ACCEPTED_IMAGE_TYPES, detectImageFormat } from '../../../admin/MasterCategoryImageField.jsx'
+import MasterCategoryImageField, { ACCEPTED_IMAGE_TYPES, detectImageFormat } from '../../../shared/components/image-field/ImageCropEditor.jsx'
 
 export const IMAGE_FIELD_MAX_BYTES = 200 * 1024
 
