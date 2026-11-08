@@ -28,8 +28,12 @@ function masterSelectionOf(product) {
 }
 
 // product: a saved master product in edit mode; omitted when adding a new product.
-export default function AddMasterProductDialog({ onClose, onSaved, product }) {
-  const isEditing = Boolean(product)
+export default function AddMasterProductDialog({ onClose, onSaved, product, copyProductId }) {
+  const isCopying = Boolean(product && copyProductId)
+  const isEditing = Boolean(product) && !isCopying
+  const formProduct = isCopying
+    ? { ...product, product_id: copyProductId, product_name: `Copy - ${product.product_name || ''}` }
+    : product
   const [businessTypes, setBusinessTypes] = useState([])
   const [productTypes, setProductTypes] = useState([])
   const [mappings, setMappings] = useState([])
@@ -150,7 +154,7 @@ export default function AddMasterProductDialog({ onClose, onSaved, product }) {
       >
         <div className="master-product-dialog-head">
           <div>
-            <h2 id="add-master-product-title">{isEditing ? 'Edit Product' : 'Add Product'}</h2>
+            <h2 id="add-master-product-title">{isCopying ? 'Copy Product' : isEditing ? 'Edit Product' : 'Add Product'}</h2>
             <p className="dashboard-intro">Choose a Business Type, Business Category, and Product Type.</p>
           </div>
           <button aria-label="Close" className="store-btn" onClick={onClose} type="button">×</button>
@@ -246,8 +250,10 @@ export default function AddMasterProductDialog({ onClose, onSaved, product }) {
                 </dl>
                 <DynamicProductForm
                   key={selectedProductType.id}
-                  editingProductId={product?.documentId}
-                  initialData={product}
+                  lockedProductId={isCopying ? copyProductId : undefined}
+                  createOnly={isCopying}
+                  editingProductId={isEditing ? product?.documentId : undefined}
+                  initialData={formProduct}
                   onSaved={onSaved}
                   productTypeId={selectedProductType.id}
                   selection={{

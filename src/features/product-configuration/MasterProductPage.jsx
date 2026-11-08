@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { listBusinessCategories } from '../../services/businessCategoryService.js'
 import { listActiveBusinessTypes } from '../../services/businessTypeService.js'
+import GlobalConfirmationDialog from '../../shared/components/confirmation/GlobalConfirmationDialog.jsx'
 import AddMasterProductDialog from './components/AddMasterProductDialog.jsx'
 import { listProductTypeConfigs } from './services/productTypeConfigService.js'
-import { deleteMasterProduct, listMasterProducts } from './services/masterProductService.js'
+import { deleteMasterProduct, listMasterProducts, masterProductIdExists, validateProductId } from './services/masterProductService.js'
 
 const PRODUCT_TABLE_COLUMNS = [
   'Product Image',
@@ -33,6 +34,15 @@ function EditIcon() {
   )
 }
 
+function CopyIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16">
+      <rect height="14" rx="2" width="14" x="8" y="8" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  )
+}
+
 function TrashIcon() {
   return (
     <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16">
@@ -40,6 +50,89 @@ function TrashIcon() {
       <path d="M8 6V4h8v2" />
       <path d="M6 6l1 14h10l1-14" />
     </svg>
+  )
+}
+
+function CopyMasterProductDialog({ product, onCancel, onContinue }) {
+  const originalProductId = productIdOf(product)
+  const [newProductId, setNewProductId] = useState(`${originalProductId}-copy`)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [duplicate, setDuplicate] = useState(false)
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (busy) return
+    setError('')
+    const productId = newProductId.trim().toLowerCase()
+    setNewProductId(productId)
+    if (!productId) {
+      setError('New Product ID is required.')
+      return
+    }
+    if (!/^[a-z0-9-]+$/.test(productId)) {
+      setError('Use lowercase letters, numbers, and hyphens only. Spaces and other characters are not allowed.')
+      return
+    }
+    try {
+      validateProductId(productId)
+    } catch (validationError) {
+      setError(validationError.message || 'Enter a valid Product ID.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      if (await masterProductIdExists(productId)) {
+        setDuplicate(true)
+        setError(`Product ID "${productId}" already exists. Choose a different ID.`)
+        return
+      }
+      onContinue(productId)
+    } catch (checkError) {
+      setError(checkError.message || 'The Product ID could not be checked.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="master-product-dialog-backdrop" onClick={busy ? undefined : onCancel} role="presentation">
+      <section
+        aria-labelledby="copy-master-product-title"
+        aria-modal="true"
+        className="master-product-dialog master-product-confirm"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <h2 id="copy-master-product-title">Copy Product</h2>
+        <form className="dynamic-product-form" noValidate onSubmit={handleSubmit}>
+          <label className="dynamic-master-product-field">
+            <span>Original Product ID</span>
+            <input readOnly value={originalProductId} />
+          </label>
+          <label className="dynamic-master-product-field">
+            <span>New Product ID <span className="dynamic-master-product-required" aria-hidden="true">*</span></span>
+            <input
+              autoFocus
+              onChange={(event) => {
+                setNewProductId(event.target.value)
+                setError('')
+                setDuplicate(false)
+              }}
+              required
+              value={newProductId}
+            />
+          </label>
+          <span className="dynamic-master-product-note">Enter a unique ID using lowercase letters, numbers, and hyphens only. No spaces. This will be the new Firestore document ID.</span>
+          {error && <p className="store-state store-state-error" role="alert">{error}</p>}
+          <div className="store-actions">
+            <button className="store-btn" disabled={busy} onClick={onCancel} type="button">Cancel</button>
+            <button className="store-btn store-btn-approve" disabled={busy || duplicate} type="submit">{busy ? 'Checking...' : 'Continue'}</button>
+          </div>
+        </form>
+      </section>
+    </div>
   )
 }
 
@@ -72,46 +165,6 @@ function matchesSearch(product, query) {
     .some((value) => String(value ?? '').toLowerCase().includes(query))
 }
 
-// Confirmation for deleting a product. Cancel closes without changes; Confirm stays disabled while the delete runs.
-function DeleteMasterProductDialog({ product, busy, error, onCancel, onConfirm }) {
-  useEffect(() => {
-    function handleKeyDown(event) {
-      if (event.key === 'Escape' && !busy) onCancel()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [busy, onCancel])
-
-  const name = product.product_name || '—'
-  const id = productIdOf(product)
-  return (
-    <div className="master-product-dialog-backdrop" onClick={busy ? undefined : onCancel} role="presentation">
-      <section
-        aria-describedby="delete-master-product-text"
-        aria-labelledby="delete-master-product-title"
-        aria-modal="true"
-        className="master-product-dialog master-product-confirm"
-        onClick={(event) => event.stopPropagation()}
-        role="alertdialog"
-      >
-        <h2 id="delete-master-product-title">Delete Product?</h2>
-        <p id="delete-master-product-text">
-          Product Name: <strong>{name}</strong><br />
-          Product ID: <strong>{id}</strong>
-        </p>
-        <p>The product document and its saved images will be permanently deleted. This cannot be undone.</p>
-        {error && <p className="store-state store-state-error" role="alert">{error}</p>}
-        <div className="store-actions">
-          <button className="store-btn" disabled={busy} onClick={onCancel} type="button">Cancel</button>
-          <button className="store-btn store-btn-reject" disabled={busy} onClick={onConfirm} type="button">
-            {busy ? 'Deleting...' : 'Delete'}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-}
-
 export default function MasterProductPage() {
   const [search, setSearch] = useState('')
   const [products, setProducts] = useState([])
@@ -128,6 +181,8 @@ export default function MasterProductPage() {
   const [selectedProductTypeId, setSelectedProductTypeId] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
+  const [copyProductId, setCopyProductId] = useState('')
+  const [copyTarget, setCopyTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -203,18 +258,33 @@ export default function MasterProductPage() {
   function openAddDialog() {
     setActionMessage('')
     setEditingProduct(null)
+    setCopyProductId('')
     setAddOpen(true)
   }
 
   function openEditDialog(product) {
     setActionMessage('')
     setEditingProduct(product)
+    setCopyProductId('')
+    setAddOpen(true)
+  }
+
+  function openCopyDialog(product) {
+    setActionMessage('')
+    setCopyTarget(product)
+  }
+
+  function continueCopyProduct(newProductId) {
+    setEditingProduct(copyTarget)
+    setCopyProductId(newProductId)
+    setCopyTarget(null)
     setAddOpen(true)
   }
 
   function closeProductDialog() {
     setAddOpen(false)
     setEditingProduct(null)
+    setCopyProductId('')
   }
 
   function handleProductSaved(result) {
@@ -369,6 +439,16 @@ export default function MasterProductPage() {
                         <EditIcon />
                       </button>
                       <button
+                        aria-label={`Copy ${product.product_name || productIdOf(product)}`}
+                        className="master-product-icon-btn"
+                        disabled={deleting}
+                        onClick={() => openCopyDialog(product)}
+                        title="Copy product"
+                        type="button"
+                      >
+                        <CopyIcon />
+                      </button>
+                      <button
                         aria-label={`Delete ${product.product_name || productIdOf(product)}`}
                         className="master-product-icon-btn master-product-icon-btn-danger"
                         disabled={deleting}
@@ -398,19 +478,35 @@ export default function MasterProductPage() {
 
       {addOpen && (
         <AddMasterProductDialog
-          key={editingProduct?.documentId ?? 'new'}
+          key={copyProductId ? `copy:${copyProductId}` : editingProduct?.documentId ?? 'new'}
           onClose={closeProductDialog}
           onSaved={handleProductSaved}
+          copyProductId={copyProductId}
           product={editingProduct}
         />
       )}
+      {copyTarget && (
+        <CopyMasterProductDialog
+          onCancel={() => setCopyTarget(null)}
+          onContinue={continueCopyProduct}
+          product={copyTarget}
+        />
+      )}
       {deleteTarget && (
-        <DeleteMasterProductDialog
-          busy={deleting}
+        <GlobalConfirmationDialog
+          cancelButtonText="Cancel"
+          confirmButtonText="Delete"
+          dialogType="delete"
+          entityType="product"
           error={deleteError}
+          itemId={productIdOf(deleteTarget)}
+          itemImage={productImageUrl(deleteTarget)}
+          itemName={deleteTarget.product_name || '—'}
+          loading={deleting}
           onCancel={closeDeleteDialog}
           onConfirm={confirmDelete}
-          product={deleteTarget}
+          subtitle="The product and its saved data will be removed."
+          title="Delete Product?"
         />
       )}
     </section>

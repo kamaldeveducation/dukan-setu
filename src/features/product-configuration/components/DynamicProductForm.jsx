@@ -19,21 +19,26 @@ function buildLayout({ config, groups, fields }) {
       fields: group.fields
         .map((entry) => ({ entry, global: fieldsById.get(entry.fieldId) }))
         .filter(({ global }) => global && global.status === 'active')
-        .map(({ entry, global }) => ({
-          id: entry.fieldId,
-          key: global.key || entry.fieldKey,
-          type: global.fieldType,
-          label: entry.labelOverride.trim() || global.label || global.name || global.key,
-          help: entry.helpTextOverride.trim() || global.description,
-          required: entry.required,
-          hidden: entry.visibility === 'hidden',
-          validation: global.validation,
-          options: global.options
-            .filter((option) => option.active !== false)
-            .slice()
-            .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
-          sortOrder: entry.sortOrder,
-        })),
+        .map(({ entry, global }) => {
+          const key = global.key || entry.fieldKey
+          return {
+            id: entry.fieldId,
+            key,
+            type: global.fieldType,
+            label: entry.labelOverride.trim() || global.label || global.name || global.key,
+            help: entry.helpTextOverride.trim() || global.description,
+            required: entry.required,
+            hidden: entry.visibility === 'hidden',
+            validation: key === 'product_name'
+              ? { ...global.validation, minLength: undefined, maxLength: undefined }
+              : global.validation,
+            options: global.options
+              .filter((option) => option.active !== false)
+              .slice()
+              .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
+            sortOrder: entry.sortOrder,
+          }
+        }),
     }))
 }
 
@@ -65,18 +70,24 @@ function extensionOf(storagePath) {
 
 // Saved images carry url and storagePath only. previewUrl is the saved URL, so the crop editor can show it without a blob.
 function savedImageItems(items) {
-  return items.map((item, index) => ({
-    id: `saved-${index}`,
-    order: index,
-    url: item.url,
-    previewUrl: item.url,
-    storagePath: item.storagePath,
-    contentType: item.contentType,
-    extension: extensionOf(item.storagePath),
-    width: item.width,
-    height: item.height,
-    size: item.size,
-  }))
+  const savedItems = Array.isArray(items) ? items : items ? [items] : []
+  return savedItems.map((saved, index) => {
+    const item = typeof saved === 'string' ? { url: saved } : saved || {}
+    const url = item.url || item.downloadURL || item.downloadUrl || ''
+    const storagePath = item.storagePath || item.path || ''
+    return {
+      id: `saved-${index}`,
+      order: index,
+      url,
+      previewUrl: url,
+      storagePath,
+      contentType: item.contentType,
+      extension: extensionOf(storagePath),
+      width: item.width,
+      height: item.height,
+      size: item.size,
+    }
+  })
 }
 
 function FieldInput({ field, value, onChange, onBlur, describedBy, disabled }) {
@@ -142,7 +153,7 @@ function FieldInput({ field, value, onChange, onBlur, describedBy, disabled }) {
 
 // initialData: saved product document in edit mode; its values are prefilled once the form layout is ready.
 // editingProductId: set in edit mode; the Product ID is locked because it is the document ID.
-export default function DynamicProductForm({ productTypeId, selection, onSaved, initialData, editingProductId }) {
+export default function DynamicProductForm({ productTypeId, selection, onSaved, initialData, editingProductId, lockedProductId, createOnly = false }) {
   const [state, setState] = useState({ productTypeId: '', loading: true, error: '', data: null })
   const [reload, setReload] = useState(0)
   const [values, setValues] = useState({})
@@ -176,7 +187,7 @@ export default function DynamicProductForm({ productTypeId, selection, onSaved, 
       for (const field of group.fields) {
         const saved = initialData[field.key]
         if (saved === undefined || saved === null) continue
-        prefilled[field.id] = field.type === 'image' && Array.isArray(saved) ? savedImageItems(saved) : saved
+        prefilled[field.id] = field.type === 'image' ? savedImageItems(saved) : saved
       }
     }
     setValues(prefilled)
@@ -190,16 +201,17 @@ export default function DynamicProductForm({ productTypeId, selection, onSaved, 
   async function handleSubmit(event) {
     event.preventDefault()
     if (savingRef.current) return
-    const allFields = visibleGroups.flatMap((group) => group.fields)
-    setTouched((prev) => ({ ...prev, ...Object.fromEntries(allFields.map((field) => [field.id, true])) }))
-    if (allFields.some((field) => validateValue(field, values[field.id]))) {
+    const visibleFields = visibleGroups.flatMap((group) => group.fields)
+    setTouched((prev) => ({ ...prev, ...Object.fromEntries(visibleFields.map((field) => [field.id, true])) }))
+    if (visibleFields.some((field) => validateValue(field, values[field.id]))) {
       setSaveState({ status: 'error', message: 'Fix the highlighted fields before saving.' })
       return
     }
     savingRef.current = true
     setSaveState({ status: 'saving', message: '' })
     try {
-      const result = await saveMasterProduct({ fields: allFields, values, selection, editingProductId })
+      const fieldsToSave = createOnly ? layout.flatMap((group) => group.fields) : visibleFields
+      const result = await saveMasterProduct({ fields: fieldsToSave, values, selection, editingProductId, createOnly })
       setSaveState({ status: 'success', message: `Product ${result.productId} ${result.created ? 'saved' : 'updated'} successfully.` })
       onSaved?.(result)
     } catch (error) {
@@ -244,7 +256,7 @@ export default function DynamicProductForm({ productTypeId, selection, onSaved, 
                   </label>
                   <FieldInput
                     describedBy={`dpf-${field.id}-note`}
-                    disabled={Boolean(editingProductId) && field.key === 'product_id'}
+                    disabled={Boolean(editingProductId || lockedProductId) && field.key === 'product_id'}
                     field={field}
                     onBlur={() => setTouched((prev) => ({ ...prev, [field.id]: true }))}
                     onChange={(next) => {

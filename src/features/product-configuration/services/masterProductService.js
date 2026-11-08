@@ -7,6 +7,7 @@ export const MASTER_PRODUCTS_COLLECTION = 'master_products'
 const PRODUCT_ID_MAX_BYTES = 1500
 const PRODUCT_ID_KEY = 'product_id'
 const PRODUCT_NAME_KEY = 'product_name'
+const IMAGE_READ_TIMEOUT_MS = 15000
 
 function serviceError(code, message) {
   const error = new Error(message)
@@ -36,37 +37,84 @@ function extensionFor(item) {
   return item.contentType === 'image/webp' ? 'webp' : 'jpg'
 }
 
+function storagePathFor(item) {
+  if (typeof item.storagePath === 'string' && item.storagePath) return item.storagePath
+  if (typeof item.url !== 'string' || !item.url) return ''
+  try {
+    const url = new URL(item.url)
+    if (url.hostname === 'firebasestorage.googleapis.com' || url.hostname === 'storage.googleapis.com') {
+      return storageRef(storage, item.url).fullPath
+    }
+  } catch {
+    return ''
+  }
+  return ''
+}
+
 // Images already saved in Storage (edit mode) have no blob. Their bytes are read through the authenticated SDK first, then the saved URL as a fallback.
 async function imageBlobOf(item, fieldKey) {
   if (item.blob instanceof Blob && item.blob.size > 0) return item.blob
-  if (typeof item.storagePath === 'string' && item.storagePath) {
-    try {
-      const blob = await getBlob(storageRef(storage, item.storagePath))
-      if (blob.size > 0) return blob
-    } catch {
-      // Fall back to the saved URL below.
+
+  let storageReadError
+  const load = async () => {
+    if (typeof item.storagePath === 'string' && item.storagePath) {
+      try {
+        const blob = await getBlob(storageRef(storage, item.storagePath))
+        if (blob.size > 0) return blob
+      } catch (error) {
+        storageReadError = error
+      }
     }
-  }
-  if (typeof item.url === 'string' && item.url) {
-    const response = await fetch(item.url)
-    if (!response.ok) {
-      throw serviceError('image-load-failed', `A saved image in "${fieldKey}" could not be loaded. Try again.`)
+    if (typeof item.url === 'string' && item.url) {
+      try {
+        const response = await fetch(item.url)
+        if (!response.ok) {
+          throw serviceError('image-load-failed', `The saved image in "${fieldKey}" returned HTTP ${response.status}.`)
+        }
+        const blob = await response.blob()
+        if (blob.size > 0) return blob
+      } catch (error) {
+        const storageMessage = storageReadError?.message ? ` Storage read failed: ${storageReadError.message}` : ''
+        throw serviceError('image-load-failed', `The saved image in "${fieldKey}" could not be read from Firebase Storage: ${error.message || 'Unknown download error.'}.${storageMessage}`)
+      }
     }
-    const blob = await response.blob()
-    if (blob.size > 0) return blob
+    throw serviceError('invalid-image', `An image in "${fieldKey}" is missing its data. Remove it and add it again.`)
   }
-  throw serviceError('invalid-image', `An image in "${fieldKey}" is missing its data. Remove it and add it again.`)
+
+  let timeoutId
+  const timeout = new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(serviceError('image-load-timeout', `Loading the saved image in "${fieldKey}" timed out. Check Firebase Storage access and CORS settings, then try again.`))
+    }, IMAGE_READ_TIMEOUT_MS)
+  })
+  try {
+    return await Promise.race([load(), timeout])
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
-async function uploadImageField({ fieldKey, items, selection, productId }) {
+async function uploadImageField({ fieldKey, items, selection, productId, copying = false }) {
   const sorted = [...items].sort((left, right) => left.order - right.order)
   // All sources are read before any write, so an upload can never overwrite a file that a later item still needs.
   const plans = []
   for (const [index, item] of sorted.entries()) {
     const storagePath = buildImageStoragePath({ selection, productId, fieldKey, index, extension: extensionFor(item) })
-    // An already saved image stays at its current Storage path even if the product's categories changed.
-    const keep = !item.blob && Boolean(item.url) && typeof item.storagePath === 'string' && Boolean(item.storagePath)
-    plans.push({ index, item, storagePath, keep, blob: keep ? null : await imageBlobOf(item, fieldKey) })
+    const existingPath = storagePathFor(item)
+    const existingImage = !item.blob && Boolean(item.url || existingPath)
+    // Copies reuse saved image references; only images with new local blobs need uploading.
+    // Regular edits preserve their existing behavior when categories change.
+    const keep = copying
+      ? existingImage
+      : !item.blob && Boolean(item.url) && Boolean(item.storagePath)
+    const existingUrl = item.url || (keep && existingPath ? await getDownloadURL(storageRef(storage, existingPath)) : '')
+    plans.push({
+      index,
+      item: { ...item, url: existingUrl, storagePath: existingPath || item.storagePath },
+      storagePath,
+      keep,
+      blob: keep ? null : await imageBlobOf(item, fieldKey),
+    })
   }
   const uploaded = []
   for (const { index, item, storagePath, keep, blob } of plans) {
@@ -74,7 +122,7 @@ async function uploadImageField({ fieldKey, items, selection, productId }) {
       uploaded.push({
         order: index,
         url: item.url,
-        storagePath: item.storagePath,
+        ...(item.storagePath ? { storagePath: item.storagePath } : {}),
         contentType: item.contentType,
         width: item.width,
         height: item.height,
@@ -83,8 +131,16 @@ async function uploadImageField({ fieldKey, items, selection, productId }) {
       continue
     }
     const objectRef = storageRef(storage, storagePath)
-    await uploadBytes(objectRef, blob, { contentType: item.contentType })
-    const url = await getDownloadURL(objectRef)
+    let url
+    try {
+      await uploadBytes(objectRef, blob, { contentType: item.contentType })
+      url = await getDownloadURL(objectRef)
+    } catch (error) {
+      if (error?.code === 'storage/network-request-failed' || error?.code === 'storage/unknown') {
+        throw serviceError('storage-upload-failed', `Firebase Storage could not complete the image upload. Check your connection and Storage bucket CORS configuration for this app origin. ${error.message || ''}`.trim())
+      }
+      throw error
+    }
     uploaded.push({
       order: index,
       url,
@@ -164,7 +220,10 @@ function toFirebaseError(error) {
   if (error?.code === 'permission-denied' || error?.code === 'storage/unauthorized') {
     return serviceError('permission-denied', 'Permission denied. Your account is not allowed to save Master Products.')
   }
-  if (error?.code === 'unavailable' || error?.code === 'storage/retry-limit-exceeded' || error?.code === 'storage/network-request-failed') {
+  if (error?.code === 'storage/network-request-failed') {
+    return serviceError('storage-network-failed', 'Firebase Storage could not complete the image operation. Check your connection and Storage bucket CORS configuration for this app origin, then try again.')
+  }
+  if (error?.code === 'unavailable' || error?.code === 'storage/retry-limit-exceeded') {
     return serviceError('unavailable', 'Firebase is unreachable. Check your connection and try again. The form data is kept.')
   }
   return serviceError('failed', `The product could not be saved: ${error?.message || 'Unknown error.'}`)
@@ -173,7 +232,7 @@ function toFirebaseError(error) {
 // fields: visible form fields ({ id, key, type, ... }); values: submitted values keyed by field.id;
 // selection: { businessTypeId, businessCategoryId, masterCategoryId, subCategoryId, subSubCategoryId }.
 // editingProductId: set in edit mode; the save then updates that document and fails if it no longer exists.
-export async function saveMasterProduct({ fields, values, selection, editingProductId }) {
+export async function saveMasterProduct({ fields, values, selection, editingProductId, createOnly = false }) {
   const entries = fields.map((field) => ({ field, value: values[field.id] }))
   let productId
   let payload
@@ -188,7 +247,7 @@ export async function saveMasterProduct({ fields, values, selection, editingProd
     const uploadedByKey = new Map()
     for (const { field, value } of entries) {
       if (field.type !== 'image' || !Array.isArray(value) || value.length === 0) continue
-      uploadedByKey.set(field.key, await uploadImageField({ fieldKey: field.key, items: value, selection, productId }))
+      uploadedByKey.set(field.key, await uploadImageField({ fieldKey: field.key, items: value, selection, productId, copying: createOnly }))
     }
 
     payload = {}
@@ -203,6 +262,9 @@ export async function saveMasterProduct({ fields, values, selection, editingProd
     await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(docRef)
       const previous = snapshot.exists() ? snapshot.data() : null
+      if (createOnly && previous) {
+        throw serviceError('duplicate-product-id', `Product ID "${productId}" already exists. Choose a different ID.`)
+      }
       if (editingProductId && !previous) {
         throw serviceError('not-found', 'This product no longer exists. Reload the list and try again.')
       }
@@ -222,6 +284,16 @@ export async function saveMasterProduct({ fields, values, selection, editingProd
   // Best-effort: the Firestore write already succeeded, so a failed cleanup only leaves unused files behind.
   await Promise.allSettled(stalePaths.map((path) => deleteObject(storageRef(storage, path))))
   return { productId, created }
+}
+
+export async function masterProductIdExists(rawProductId) {
+  const productId = validateProductId(rawProductId)
+  try {
+    const snapshot = await getDoc(doc(db, MASTER_PRODUCTS_COLLECTION, productId))
+    return snapshot.exists()
+  } catch (error) {
+    throw toFirebaseError(error)
+  }
 }
 
 // Storage files are deleted first. If any file fails (other than already missing), the document is kept so the user can retry.
