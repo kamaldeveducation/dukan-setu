@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { listBusinessCategories } from '../../services/businessCategoryService.js'
 import { listActiveBusinessTypes } from '../../services/businessTypeService.js'
 import GlobalConfirmationDialog from '../../shared/components/confirmation/GlobalConfirmationDialog.jsx'
 import AddMasterProductDialog from './components/AddMasterProductDialog.jsx'
+import MasterProductCategoryFilters from './components/MasterProductCategoryFilters.jsx'
 import { listProductTypeConfigs } from './services/productTypeConfigService.js'
 import { deleteMasterProduct, listMasterProducts, masterProductIdExists, validateProductId } from './services/masterProductService.js'
 
@@ -13,6 +14,9 @@ const PRODUCT_TABLE_COLUMNS = [
   'Business Type',
   'Business Category',
   'Product Type',
+  'Master Category',
+  'Master Sub Category',
+  'Master Sub-Sub Category',
   'Actions',
 ]
 
@@ -179,6 +183,7 @@ export default function MasterProductPage() {
   const [categoriesLoading, setCategoriesLoading] = useState(false)
   const [selectedBusinessCategoryId, setSelectedBusinessCategoryId] = useState('')
   const [selectedProductTypeId, setSelectedProductTypeId] = useState('')
+  const [masterFilters, setMasterFilters] = useState({ masterCategoryId: '', masterSubCategoryId: '', masterSubSubCategoryId: '' })
   const [addOpen, setAddOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [copyProductId, setCopyProductId] = useState('')
@@ -222,9 +227,26 @@ export default function MasterProductPage() {
     }
   }, [selectedBusinessTypeId])
 
+  const serverFilters = useMemo(() => ({
+    businessTypeId: selectedBusinessTypeId,
+    businessCategoryId: selectedBusinessCategoryId,
+    productTypeId: selectedProductTypeId,
+    masterCategoryId: masterFilters.masterCategoryId,
+    masterSubCategoryId: masterFilters.masterSubCategoryId,
+    masterSubSubCategoryId: masterFilters.masterSubSubCategoryId,
+  }), [
+    selectedBusinessTypeId,
+    selectedBusinessCategoryId,
+    selectedProductTypeId,
+    masterFilters.masterCategoryId,
+    masterFilters.masterSubCategoryId,
+    masterFilters.masterSubSubCategoryId,
+  ])
+  const serverFiltersActive = Object.values(serverFilters).some(Boolean)
+
   useEffect(() => {
     let active = true
-    listMasterProducts()
+    listMasterProducts(serverFilters)
       .then((records) => {
         if (!active) return
         setProducts(records)
@@ -239,7 +261,12 @@ export default function MasterProductPage() {
     return () => {
       active = false
     }
-  }, [productsReload])
+  }, [serverFilters, productsReload])
+
+  const handleMasterFiltersChange = useCallback((patch) => {
+    setProductsLoading(true)
+    setMasterFilters((current) => ({ ...current, ...patch }))
+  }, [])
 
   function reloadProducts() {
     setProductsLoading(true)
@@ -249,6 +276,7 @@ export default function MasterProductPage() {
 
   function handleBusinessTypeChange(event) {
     const businessTypeId = event.target.value
+    setProductsLoading(true)
     setSelectedBusinessTypeId(businessTypeId)
     setSelectedBusinessCategoryId('')
     setCategories([])
@@ -322,10 +350,8 @@ export default function MasterProductPage() {
   }
 
   const query = search.trim().toLowerCase()
-  const visibleProducts = products.filter((product) => matchesSearch(product, query)
-    && (!selectedBusinessTypeId || product.businessTypeId === selectedBusinessTypeId)
-    && (!selectedBusinessCategoryId || product.businessCategoryId === selectedBusinessCategoryId)
-    && (!selectedProductTypeId || product.productTypeId === selectedProductTypeId))
+  // Business and category filters are applied by the Firestore query; search runs on the loaded result set.
+  const visibleProducts = products.filter((product) => matchesSearch(product, query))
 
   return (
     <section className="product-config-page master-product-page" aria-labelledby="master-products-title">
@@ -371,7 +397,10 @@ export default function MasterProductPage() {
           <span>Business Category</span>
           <select
             disabled={!selectedBusinessTypeId || categoriesLoading}
-            onChange={(event) => setSelectedBusinessCategoryId(event.target.value)}
+            onChange={(event) => {
+              setProductsLoading(true)
+              setSelectedBusinessCategoryId(event.target.value)
+            }}
             value={selectedBusinessCategoryId}
           >
             <option value="">All Business Categories</option>
@@ -384,13 +413,28 @@ export default function MasterProductPage() {
 
         <label className="dynamic-master-product-field">
           <span>Product Type</span>
-          <select onChange={(event) => setSelectedProductTypeId(event.target.value)} value={selectedProductTypeId}>
+          <select
+            onChange={(event) => {
+              setProductsLoading(true)
+              setSelectedProductTypeId(event.target.value)
+            }}
+            value={selectedProductTypeId}
+          >
             <option value="">All Product Types</option>
             {productTypes.map((productType) => (
               <option key={productType.id} value={productType.id}>{productType.name}</option>
             ))}
           </select>
         </label>
+
+        <MasterProductCategoryFilters
+          businessCategoryId={selectedBusinessCategoryId}
+          businessTypeId={selectedBusinessTypeId}
+          masterCategoryId={masterFilters.masterCategoryId}
+          masterSubCategoryId={masterFilters.masterSubCategoryId}
+          masterSubSubCategoryId={masterFilters.masterSubSubCategoryId}
+          onChange={handleMasterFiltersChange}
+        />
       </div>
 
       {productsError && <p className="store-feedback store-feedback-error" role="alert">{productsError}</p>}
@@ -409,7 +453,7 @@ export default function MasterProductPage() {
             {productsLoading && (
               <tr><td className="master-product-table-message" colSpan={PRODUCT_TABLE_COLUMNS.length} role="status">Loading products...</td></tr>
             )}
-            {!productsLoading && products.length > 0 && visibleProducts.length === 0 && (
+            {!productsLoading && visibleProducts.length === 0 && (products.length > 0 || serverFiltersActive) && (
               <tr><td className="master-product-table-message" colSpan={PRODUCT_TABLE_COLUMNS.length}>No products match the current search or filters.</td></tr>
             )}
             {visibleProducts.map((product) => {
@@ -426,6 +470,9 @@ export default function MasterProductPage() {
                   <td>{labelFor(product.businessTypeName, product.businessTypeId)}</td>
                   <td>{labelFor(product.businessCategoryName, product.businessCategoryId)}</td>
                   <td>{labelFor(product.productTypeName, product.productTypeId)}</td>
+                  <td>{labelFor(product.masterCategoryName, product.masterCategoryId)}</td>
+                  <td>{labelFor(product.masterSubCategoryName, product.masterSubCategoryId)}</td>
+                  <td>{labelFor(product.masterSubSubCategoryName, product.masterSubSubCategoryId)}</td>
                   <td>
                     <div className="master-product-actions">
                       <button
@@ -467,7 +514,7 @@ export default function MasterProductPage() {
         </table>
       </div>
 
-      {!productsLoading && !productsError && products.length === 0 && (
+      {!productsLoading && !productsError && !serverFiltersActive && products.length === 0 && (
         <div className="master-product-empty">
           <PackageIcon />
           <h2>No Products Yet</h2>

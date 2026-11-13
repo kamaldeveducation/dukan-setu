@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDoc, getDocs, runTransaction, serverTimestamp } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, where } from 'firebase/firestore'
 import { deleteObject, getBlob, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage'
 import { db, storage } from '../../../firebase'
 import { buildImageStoragePath, getImageFieldPolicy } from './masterProductImagePolicy'
@@ -318,10 +318,27 @@ function createdAtSeconds(product) {
   return typeof product.createdAt?.seconds === 'number' ? product.createdAt.seconds : 0
 }
 
+// Stored ID fields matched by equality in Firestore. Equality-only queries need no composite index.
+const PRODUCT_FILTER_FIELDS = {
+  businessTypeId: 'businessTypeId',
+  businessCategoryId: 'businessCategoryId',
+  productTypeId: 'productTypeId',
+  masterCategoryId: 'masterCategoryId',
+  masterSubCategoryId: 'masterSubCategoryId',
+  masterSubSubCategoryId: 'masterSubSubCategoryId',
+}
+
 // Newest first. Documents written before category metadata existed are still returned.
-export async function listMasterProducts() {
+// Empty filter values are ignored; set values are matched server-side against stored IDs.
+export async function listMasterProducts(filters = {}) {
   try {
-    const snapshot = await getDocs(collection(db, MASTER_PRODUCTS_COLLECTION))
+    const constraints = Object.entries(PRODUCT_FILTER_FIELDS)
+      .filter(([key]) => filters[key])
+      .map(([key, field]) => where(field, '==', filters[key]))
+    const productsQuery = constraints.length
+      ? query(collection(db, MASTER_PRODUCTS_COLLECTION), ...constraints)
+      : collection(db, MASTER_PRODUCTS_COLLECTION)
+    const snapshot = await getDocs(productsQuery)
     return snapshot.docs
       .map((docSnap) => ({ ...docSnap.data(), documentId: docSnap.id }))
       .sort((left, right) => createdAtSeconds(right) - createdAtSeconds(left))
