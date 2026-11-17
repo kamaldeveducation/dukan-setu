@@ -63,6 +63,7 @@ function normalizeFormConfig(snapshot) {
           sortOrder: Number.isFinite(field?.sortOrder) ? field.sortOrder : 0,
           labelOverride: field?.labelOverride ?? '',
           helpTextOverride: field?.helpTextOverride ?? '',
+          displayStyle: field?.displayStyle === 'toggle' || field?.displayStyle === 'checkbox' ? field.displayStyle : '',
         }))
         .sort((left, right) => left.sortOrder - right.sortOrder),
     }))
@@ -172,6 +173,11 @@ function buildPayload(values, sources, existingId) {
       const helpTextOverride = sanitizeText(field.helpTextOverride, FORM_CONFIG_LIMITS.helpText, 'Help text override')
       if (labelOverride) result.labelOverride = labelOverride
       if (helpTextOverride) result.helpTextOverride = helpTextOverride
+      if (global?.fieldType === 'boolean') {
+        const style = field.displayStyle || global.displayStyle
+        const isComposite = global.behavior !== 'none'
+        result.displayStyle = !isComposite && style === 'checkbox' ? 'checkbox' : 'toggle'
+      }
       return result
     })
 

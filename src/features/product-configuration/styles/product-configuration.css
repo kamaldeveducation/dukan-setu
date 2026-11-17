@@ -795,10 +795,21 @@
 .dynamic-product-form-group legend { padding: 0 8px; color: #173d34; font-weight: 700; }
 .dynamic-product-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .dynamic-product-form-grid .is-wide { grid-column: 1 / -1; }
+.dynamic-master-product-companion { padding-left: 12px; border-left: 3px solid #2e9e5b; }
 .dynamic-product-form-grid input:not([type='checkbox']), .dynamic-product-form-grid textarea { width: 100%; min-width: 0; min-height: 42px; padding: 9px 10px; border: 1px solid #d9e1d4; border-radius: 3px; color: #263b32; background: #fff; font: inherit; font-size: 13px; }
 .dynamic-product-form-grid select, .dynamic-product-form-grid textarea { width: 100%; }
 .dynamic-product-form-options { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .dynamic-product-form-options label, .dynamic-product-form-check { display: flex; align-items: center; gap: 6px; }
+.dynamic-product-form-toggle { position: relative; display: inline-flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; user-select: none; }
+.dynamic-product-form-toggle-input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.dynamic-product-form-toggle-track { position: relative; flex: 0 0 auto; width: 44px; height: 24px; border-radius: 999px; background: #d64545; transition: background-color 0.15s ease; }
+.dynamic-product-form-toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s ease; }
+.dynamic-product-form-toggle-input:checked + .dynamic-product-form-toggle-track { background: #2e9e5b; }
+.dynamic-product-form-toggle-input:checked + .dynamic-product-form-toggle-track::after { transform: translateX(20px); }
+.dynamic-product-form-toggle-input:focus-visible + .dynamic-product-form-toggle-track { outline: 2px solid #a9c2ac; outline-offset: 2px; }
+.dynamic-product-form-toggle-text { font-weight: 600; }
+.dynamic-product-form-toggle-text.is-on { color: #2e9e5b; }
+.dynamic-product-form-toggle-text.is-off { color: #d64545; }
 @media (max-width: 720px) { .dynamic-product-form-grid { grid-template-columns: 1fr; } }
 
 .master-product-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }

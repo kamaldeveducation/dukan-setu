@@ -1,10 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { loadActiveFormForProductType } from '../services/productFormConfigService.js'
+import { BOOLEAN_BEHAVIORS } from '../services/globalFieldService.js'
 import { saveMasterProduct } from '../services/masterProductService.js'
 import ImageFormField from './ImageFormField.jsx'
 
 const INPUT_TYPES = {
   text: 'text', number: 'number', currency: 'number', url: 'url', email: 'email', phone: 'tel', date: 'date',
+}
+
+// Boolean fields render as a toggle unless a checkbox is explicitly chosen (entry first, then Global Field).
+function booleanDisplayStyle(entryStyle, globalStyle) {
+  return (entryStyle || globalStyle) === 'checkbox' ? 'checkbox' : 'toggle'
+}
+
+// A Boolean with a behavior (e.g. NEW badge) owns a companion date field saved under its own key.
+function companionFor(global, fieldId) {
+  if (global.fieldType !== 'boolean' || !Object.hasOwn(BOOLEAN_BEHAVIORS, global.behavior) || global.behavior === 'none') return null
+  const { dataKey, dateLabel } = BOOLEAN_BEHAVIORS[global.behavior]
+  return { id: `${fieldId}:${dataKey}`, key: dataKey, type: 'date', label: dateLabel, validation: {}, options: [] }
 }
 
 // Resolves the stored configuration against live Field Groups and Global Fields.
@@ -21,6 +34,7 @@ function buildLayout({ config, groups, fields }) {
         .filter(({ global }) => global && global.status === 'active')
         .map(({ entry, global }) => {
           const key = global.key || entry.fieldKey
+          const companion = companionFor(global, entry.fieldId)
           return {
             id: entry.fieldId,
             key,
@@ -36,11 +50,15 @@ function buildLayout({ config, groups, fields }) {
               .filter((option) => option.active !== false)
               .slice()
               .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
+            defaultValue: global.defaultValue === true,
+            displayStyle: companion ? 'toggle' : booleanDisplayStyle(entry.displayStyle, global.displayStyle),
+            companion,
             sortOrder: entry.sortOrder,
           }
         }),
     }))
 }
+
 
 function validateValue(field, value) {
   const { validation, type } = field
@@ -61,6 +79,24 @@ function validateValue(field, value) {
   }
   return ''
 }
+
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00`).getTime())
+}
+
+// The companion date is required only while its Boolean is ON; a stored date is kept while OFF.
+function companionError(field, values) {
+  if (!field.companion || values[field.id] !== true) return ''
+  const date = values[field.companion.id]
+  if (!date) return `Select a date. It is required while ${field.label} is ON.`
+  return isIsoDate(date) ? '' : 'Enter a valid date.'
+}
+
+function formatDisplayDate(isoDate) {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 
 function extensionOf(storagePath) {
   const name = String(storagePath ?? '')
@@ -125,9 +161,19 @@ function FieldInput({ field, value, onChange, onBlur, describedBy, disabled }) {
     )
   }
   if (field.type === 'boolean') {
+    const checked = value === true
+    if (field.displayStyle === 'toggle') {
+      return (
+        <label className="dynamic-product-form-toggle">
+          <input {...common} checked={checked} className="dynamic-product-form-toggle-input" onChange={(e) => onChange(e.target.checked)} role="switch" type="checkbox" />
+          <span aria-hidden="true" className="dynamic-product-form-toggle-track" />
+          <span className={`dynamic-product-form-toggle-text ${checked ? 'is-on' : 'is-off'}`}>{checked ? 'Yes' : 'No'}</span>
+        </label>
+      )
+    }
     return (
       <label className="dynamic-product-form-check">
-        <input {...common} checked={value === true} onChange={(e) => onChange(e.target.checked)} type="checkbox" />
+        <input {...common} checked={checked} onChange={(e) => onChange(e.target.checked)} type="checkbox" />
         Yes
       </label>
     )
@@ -186,11 +232,31 @@ export default function DynamicProductForm({ productTypeId, selection, onSaved, 
     for (const group of layout) {
       for (const field of group.fields) {
         const saved = initialData[field.key]
+        if (field.companion && typeof initialData[field.companion.key] === 'string') {
+          prefilled[field.companion.id] = initialData[field.companion.key]
+        }
+        if (field.type === 'boolean') {
+          prefilled[field.id] = saved === undefined || saved === null ? field.defaultValue : saved === true || saved === 'true'
+          continue
+        }
         if (saved === undefined || saved === null) continue
         prefilled[field.id] = field.type === 'image' ? savedImageItems(saved) : saved
       }
     }
     setValues(prefilled)
+  }, [initialData, layout])
+
+  useEffect(() => {
+    if (initialData || layout.length === 0) return
+    setValues((current) => {
+      const next = { ...current }
+      for (const group of layout) {
+        for (const field of group.fields) {
+          if (field.type === 'boolean' && next[field.id] === undefined) next[field.id] = field.defaultValue
+        }
+      }
+      return next
+    })
   }, [initialData, layout])
 
   function retry() {
@@ -202,15 +268,18 @@ export default function DynamicProductForm({ productTypeId, selection, onSaved, 
     event.preventDefault()
     if (savingRef.current) return
     const visibleFields = visibleGroups.flatMap((group) => group.fields)
-    setTouched((prev) => ({ ...prev, ...Object.fromEntries(visibleFields.map((field) => [field.id, true])) }))
-    if (visibleFields.some((field) => validateValue(field, values[field.id]))) {
+    const touchedIds = visibleFields.flatMap((field) => (field.companion ? [field.id, field.companion.id] : [field.id]))
+    setTouched((prev) => ({ ...prev, ...Object.fromEntries(touchedIds.map((id) => [id, true])) }))
+    if (visibleFields.some((field) => validateValue(field, values[field.id]) || companionError(field, values))) {
       setSaveState({ status: 'error', message: 'Fix the highlighted fields before saving.' })
       return
     }
     savingRef.current = true
     setSaveState({ status: 'saving', message: '' })
     try {
-      const fieldsToSave = createOnly ? layout.flatMap((group) => group.fields) : visibleFields
+      const baseFields = createOnly ? layout.flatMap((group) => group.fields) : visibleFields
+      // The save overwrites the whole document, so a companion is always sent with its Boolean to keep its stored date.
+      const fieldsToSave = baseFields.flatMap((field) => (field.companion ? [field, field.companion] : [field]))
       const result = await saveMasterProduct({ fields: fieldsToSave, values, selection, editingProductId, createOnly })
       setSaveState({ status: 'success', message: `Product ${result.productId} ${result.created ? 'saved' : 'updated'} successfully.` })
       onSaved?.(result)
@@ -249,8 +318,10 @@ export default function DynamicProductForm({ productTypeId, selection, onSaved, 
             {group.fields.map((field) => {
               const error = touched[field.id] ? validateValue(field, values[field.id]) : ''
               const wide = field.type === 'textarea' || field.type === 'multi_select'
+              const companion = field.companion
               return (
-                <div className={`dynamic-master-product-field${wide ? ' is-wide' : ''}`} key={field.id}>
+                <Fragment key={field.id}>
+                <div className={`dynamic-master-product-field${wide ? ' is-wide' : ''}`}>
                   <label htmlFor={`dpf-${field.id}`}>
                     {field.label}{field.required && <span className="dynamic-master-product-required" aria-label="required"> *</span>}
                   </label>
@@ -269,6 +340,34 @@ export default function DynamicProductForm({ productTypeId, selection, onSaved, 
                     {error || field.help}
                   </span>
                 </div>
+                {companion && values[field.id] === true && (() => {
+                  const dateValue = values[companion.id] ?? ''
+                  const dateError = touched[companion.id] ? companionError(field, values) : ''
+                  const dateNote = isIsoDate(dateValue)
+                    ? `Selected date: ${formatDisplayDate(dateValue)}. The NEW badge is shown through this date.`
+                    : 'The NEW badge is shown through the end of the selected date.'
+                  return (
+                    <div className="dynamic-master-product-field is-wide dynamic-master-product-companion">
+                      <label htmlFor={`dpf-${companion.id}`}>
+                        {companion.label}<span className="dynamic-master-product-required" aria-label="required"> *</span>
+                      </label>
+                      <FieldInput
+                        describedBy={`dpf-${companion.id}-note`}
+                        field={companion}
+                        onBlur={() => setTouched((prev) => ({ ...prev, [companion.id]: true }))}
+                        onChange={(next) => {
+                          setValues((prev) => ({ ...prev, [companion.id]: next }))
+                          setTouched((prev) => ({ ...prev, [companion.id]: true }))
+                        }}
+                        value={dateValue}
+                      />
+                      <span className={dateError ? 'dynamic-master-product-inline-error' : 'dynamic-master-product-note'} id={`dpf-${companion.id}-note`} role={dateError ? 'alert' : undefined}>
+                        {dateError || dateNote}
+                      </span>
+                    </div>
+                  )
+                })()}
+                </Fragment>
               )
             })}
           </div>

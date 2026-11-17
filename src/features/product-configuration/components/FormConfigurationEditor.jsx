@@ -106,6 +106,7 @@ export default function FormConfigurationEditor({ config, configs, error, onCanc
         sortOrder: group.fields.length + 1,
         labelOverride: '',
         helpTextOverride: '',
+        displayStyle: '',
       }],
     }))
   }
@@ -260,6 +261,17 @@ export default function FormConfigurationEditor({ config, configs, error, onCanc
                               value={field.helpTextOverride}
                             />
                             <span className="form-builder-order">Order {fieldIndex + 1}</span>
+                            {global?.fieldType === 'boolean' && (
+                              <select
+                                aria-label="Display style"
+                                disabled={global.behavior !== 'none'}
+                                onChange={(event) => updateField(group.groupId, field.fieldId, { displayStyle: event.target.value })}
+                                value={global.behavior !== 'none' ? 'toggle' : field.displayStyle || global.displayStyle || 'toggle'}
+                              >
+                                <option value="checkbox">Checkbox</option>
+                                <option value="toggle">Toggle (Yes / No)</option>
+                              </select>
+                            )}
                           </div>
                         </div>
                       )

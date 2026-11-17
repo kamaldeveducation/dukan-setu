@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { normalizeGlobalFieldKey } from '../services/globalFieldService'
+import { BOOLEAN_BEHAVIORS, normalizeGlobalFieldKey } from '../services/globalFieldService'
 
 const initialValidation = {
   minLength: '',
@@ -24,6 +24,9 @@ function initialValues(field) {
     sortOrder: String(field?.sortOrder ?? 10),
     validation: { ...initialValidation, ...(field?.validation ?? {}) },
     options: (field?.options ?? []).map((option) => ({ ...option })),
+    defaultValue: field?.defaultValue === true,
+    displayStyle: field?.displayStyle === 'checkbox' ? 'checkbox' : 'toggle',
+    behavior: field?.behavior === 'new_badge_until' ? 'new_badge_until' : 'none',
   }
 }
 
@@ -65,7 +68,8 @@ export default function GlobalFieldForm({ error, field, fieldTypes, groups, onCa
   const supportsTextLength = values.fieldType === 'text' || values.fieldType === 'textarea'
   const supportsNumericRange = values.fieldType === 'number' || values.fieldType === 'currency'
   const supportsOptions = values.fieldType === 'dropdown' || values.fieldType === 'multi_select'
-
+  const supportsBoolean = values.fieldType === 'boolean'
+  const isCompositeBehavior = values.behavior !== 'none'
   return (
     <div className="business-type-modal-backdrop" onClick={() => !saving && onCancel()} role="presentation">
       <form
@@ -136,9 +140,37 @@ export default function GlobalFieldForm({ error, field, fieldTypes, groups, onCa
           <small className="global-field-hint">The group's document ID and key are saved with this field.</small>
         </fieldset>
 
-        {(supportsTextLength || supportsNumericRange || supportsOptions) && (
+        {(supportsTextLength || supportsNumericRange || supportsOptions || supportsBoolean) && (
           <fieldset>
             <legend>Initial Configuration</legend>
+            {supportsBoolean && (
+              <div className="global-field-config-grid">
+                <label>Default value
+                  <select onChange={(event) => setValue('defaultValue', event.target.value === 'true')} value={String(values.defaultValue)}>
+                    <option value="true">Yes (true)</option>
+                    <option value="false">No (false)</option>
+                  </select>
+                </label>
+                <label>Behavior
+                  <select onChange={(event) => setValue('behavior', event.target.value)} value={values.behavior}>
+                    {Object.entries(BOOLEAN_BEHAVIORS).map(([value, { label }]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <label>Display style
+                  <select
+                    disabled={isCompositeBehavior}
+                    onChange={(event) => setValue('displayStyle', event.target.value)}
+                    value={isCompositeBehavior ? 'toggle' : values.displayStyle}
+                  >
+                    <option value="checkbox">Checkbox</option>
+                    <option value="toggle">Toggle switch (Yes / No)</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            {supportsBoolean && isCompositeBehavior && (
+              <small className="global-field-hint">Toggle with a date picker: the date appears when the toggle is ON and is required then.</small>
+            )}
             {supportsTextLength && (
               <div className="global-field-config-grid">
                 <label>Minimum length

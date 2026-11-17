@@ -18,6 +18,16 @@ const fieldTypes = new Set([
   'email', 'phone', 'date', 'boolean', 'dropdown', 'multi_select',
 ])
 
+// Boolean behaviors. A behavior other than 'none' adds a companion date field (dataKey) shown while the toggle is ON.
+export const BOOLEAN_BEHAVIORS = {
+  none: { label: 'None (plain Yes / No)' },
+  new_badge_until: {
+    label: 'NEW badge until date',
+    dataKey: 'newDate',
+    dateLabel: 'Show NEW badge until',
+  },
+}
+
 function serviceError(code, message) {
   const error = new Error(message)
   error.code = `global-field/${code}`
@@ -72,6 +82,9 @@ function normalizeGlobalField(snapshot) {
     sortOrder: Number.isFinite(data.sortOrder) ? data.sortOrder : 0,
     validation: data.validation && typeof data.validation === 'object' ? data.validation : {},
     options: Array.isArray(data.options) ? data.options : [],
+    defaultValue: data.defaultValue === true,
+    displayStyle: data.displayStyle === 'checkbox' ? 'checkbox' : 'toggle',
+    behavior: data.behavior === 'new_badge_until' ? 'new_badge_until' : 'none',
     createdAt: data.createdAt?.toDate?.() ?? null,
     updatedAt: data.updatedAt?.toDate?.() ?? null,
   }
@@ -170,6 +183,25 @@ function validateField(values) {
     throw serviceError('invalid-options', 'Add at least one option for Dropdown and Multi-select fields.')
   }
 
+  let booleanSettings = {}
+  if (fieldType === 'boolean') {
+    const displayStyle = values.displayStyle
+    if (displayStyle !== 'checkbox' && displayStyle !== 'toggle') {
+      throw serviceError('invalid-display-style', 'Choose a display style for the Boolean field.')
+    }
+    const behavior = values.behavior ?? 'none'
+    if (!Object.hasOwn(BOOLEAN_BEHAVIORS, behavior)) {
+      throw serviceError('invalid-behavior', 'Choose a valid Boolean behavior.')
+    }
+    // Companion date fields are only shown with the toggle, so a checkbox cannot carry them.
+    const isComposite = behavior !== 'none'
+    booleanSettings = {
+      defaultValue: values.defaultValue === true,
+      displayStyle: isComposite ? 'toggle' : displayStyle,
+      behavior,
+    }
+  }
+
   return {
     name,
     key,
@@ -183,6 +215,7 @@ function validateField(values) {
     sortOrder,
     validation,
     options,
+    ...booleanSettings,
   }
 }
 
