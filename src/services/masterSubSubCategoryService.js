@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore'
 import { deleteObject, getBytes, getDownloadURL, ref as storageRef, uploadBytes, uploadBytesResumable } from 'firebase/storage'
 import { auth, db, storage } from '../firebase'
+import { versionedImagePath } from '../shared/copy/copyDefaults'
 import { listBusinessCategories } from './businessCategoryService'
 import { listBusinessTypes } from './businessTypeService'
 import { generateMasterCategoryCode, listMasterCategories } from './masterCategoryService'
@@ -159,9 +160,11 @@ async function rollbackImage(path, backup) {
 	}
 }
 
-async function uploadSubSubCategoryImage({ values, code, blob, existingPath, onProgress }) {
+// A copy reuses its original's Storage object, so replacing the original's image must not overwrite it.
+async function uploadSubSubCategoryImage({ values, code, blob, existingPath, sharedExisting, onProgress }) {
 	validateImage(blob)
-	const path = imagePathFor({ ...values, code })
+	const canonicalPath = imagePathFor({ ...values, code })
+	const path = sharedExisting && canonicalPath === existingPath ? versionedImagePath(canonicalPath) : canonicalPath
 	let backup = null
 	if (path === existingPath) {
 		try {
@@ -183,10 +186,14 @@ async function uploadSubSubCategoryImage({ values, code, blob, existingPath, onP
 	}
 }
 
+async function imagePathInUse(path, excludingId = '') {
+	const snapshot = await getDocs(subSubCategoriesRef)
+	return snapshot.docs.some((item) => item.id !== excludingId && item.data().imagePath === path)
+}
+
 async function removeImageIfUnused(path) {
 	if (!path) return []
-	const snapshot = await getDocs(subSubCategoriesRef)
-	if (snapshot.docs.some((item) => item.data().imagePath === path)) return []
+	if (await imagePathInUse(path)) return []
 	try {
 		await deleteObject(storageRef(storage, path))
 		return []
@@ -249,6 +256,7 @@ export async function createMasterSubSubCategory(values, onProgress) {
 	const image = values.imageBlob
 		? await uploadSubSubCategoryImage({ values, code: fields.code, blob: values.imageBlob, onProgress })
 		: null
+	const sourceImage = !image && values.sourceImage?.imagePath ? values.sourceImage : null
 	try {
 		await runTransaction(db, async (transaction) => {
 			if ((await transaction.get(reference)).exists()) throw serviceError('duplicate-code', 'A Master Sub-Subcategory with this code already exists.')
@@ -270,6 +278,7 @@ export async function createMasterSubSubCategory(values, onProgress) {
 				updatedAt: timestamp,
 			}
 			if (image) Object.assign(data, { imageUrl: image.imageUrl, imagePath: image.imagePath })
+			else if (sourceImage) Object.assign(data, { imageUrl: sourceImage.imageUrl || '', imagePath: sourceImage.imagePath })
 			transaction.set(reference, data)
 		})
 	} catch (error) {
@@ -298,12 +307,14 @@ export async function updateMasterSubSubCategory(id, values, onProgress) {
 
 	let image = null
 	if (values.imageBlob) {
-		image = await uploadSubSubCategoryImage({ values, code: current.code, blob: values.imageBlob, existingPath: current.imagePath, onProgress })
+		const sharedExisting = Boolean(current.imagePath) && await imagePathInUse(current.imagePath, id)
+		image = await uploadSubSubCategoryImage({ values, code: current.code, blob: values.imageBlob, existingPath: current.imagePath, sharedExisting, onProgress })
 	} else if (values.removeImage) {
 		image = { imageUrl: '', imagePath: '', uploadedPath: '' }
 	} else if (current.imagePath) {
+		// Copies keep their original's image path, so the path only needs to match while the hierarchy is changing.
 		const expectedPath = imagePathFor({ ...values, code: current.code })
-		if (current.imagePath !== expectedPath) {
+		if (!hierarchy.unchanged && current.imagePath !== expectedPath) {
 			throw serviceError('image-hierarchy-change', 'Replace or remove the image when changing its parent hierarchy so it remains stored in the correct location.')
 		}
 	}

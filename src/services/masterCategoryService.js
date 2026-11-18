@@ -14,6 +14,7 @@ import { deleteObject, getBytes, getDownloadURL, ref as storageRef, uploadBytes 
 import { auth, db, storage } from '../firebase'
 import { getActiveBusinessCategory, listBusinessCategories } from './businessCategoryService'
 import { listBusinessTypes } from './businessTypeService'
+import { versionedImagePath } from '../shared/copy/copyDefaults'
 
 export const MAX_MASTER_CATEGORY_LEVEL = 3
 const MAX_LOGO_BYTES = 102400
@@ -116,12 +117,17 @@ function rollbackError(originalError, rollbackErrors) {
 	return serviceError('rollback-failed', `${originalError.message || 'The category could not be saved.'} ${rollbackErrors.length} image object(s) could not be restored or removed; retry the operation or inspect Storage.`)
 }
 
-async function uploadLogoMappings({ refs, code, blob, extension, existingLogoRefs = [] }) {
+async function uploadLogoMappings({ refs, code, blob, extension, existingLogoRefs = [], sharedPaths = new Set() }) {
 	if (!refs.length) throw serviceError('logo-mapping-required', 'Select at least one Business Category mapping before saving this image. The image must be stored under a mapped Business Type and Business Category.')
 	const mappings = sortedLogoMappings(refs)
-	const targets = mappings.map((mapping) => ({ ...mapping, logoPath: logoPathFor(mapping, code, extension) }))
 	const existingByPath = new Map(existingLogoRefs.filter((item) => item?.logoPath && item?.logoUrl).map((item) => [item.logoPath, item]))
 	const forceUpload = Boolean(blob)
+	// A path another record references must never be overwritten, so writes go to a versioned path instead.
+	const targets = mappings.map((mapping) => {
+		const preferred = logoPathFor(mapping, code, extension)
+		const willWrite = forceUpload || !existingByPath.has(preferred)
+		return { ...mapping, logoPath: willWrite && sharedPaths.has(preferred) ? versionedImagePath(preferred) : preferred }
+	})
 	const missingTargets = targets.filter((target) => forceUpload || !existingByPath.has(target.logoPath))
 	let bytes = blob
 	if (!bytes && missingTargets.length) {
@@ -188,6 +194,66 @@ async function cleanupObsoleteLogoPaths(oldLogoRefs, newLogoRefs) {
 	}
 	const results = await Promise.allSettled(candidates.filter((path) => !referenced.has(path)).map((path) => deleteObject(storageRef(storage, path))))
 	return results.filter((result) => result.status === 'rejected').map((result) => result.reason)
+}
+
+function currentLogoRefs(record) {
+	const refs = record.logoRefs.filter((item) => item?.logoPath)
+	if (record.logoPath && !refs.some((item) => item.logoPath === record.logoPath)) {
+		refs.push({ logoPath: record.logoPath, logoUrl: record.logoUrl || '' })
+	}
+	return refs
+}
+
+// Storage paths referenced by any other record; writes to these must not overwrite them.
+async function referencedLogoPaths(excludingId) {
+	const snapshot = await getDocs(collectionRef)
+	const paths = new Set()
+	for (const category of snapshot.docs) {
+		if (category.id === excludingId) continue
+		const data = category.data()
+		if (data.logoPath) paths.add(data.logoPath)
+		for (const item of Array.isArray(data.logoRefs) ? data.logoRefs : []) {
+			if (item?.logoPath) paths.add(item.logoPath)
+		}
+	}
+	return paths
+}
+
+// A copy keeps the original's Storage objects for unchanged mappings; only newly added mappings get new bytes.
+async function copyLogoMappings({ refs, code, sourceLogoRefs }) {
+	const sourceByKey = new Map(sourceLogoRefs.filter((item) => item.logoUrl).map((item) => [pairKey(item.businessTypeId, item.categoryId), item]))
+	const kept = []
+	const added = []
+	for (const ref of refs) {
+		const source = sourceByKey.get(pairKey(ref.businessTypeId, ref.categoryId))
+		if (source) kept.push({ businessTypeId: ref.businessTypeId, categoryId: ref.categoryId, logoPath: source.logoPath, logoUrl: source.logoUrl })
+		else added.push(ref)
+	}
+	if (!added.length) return { logoRefs: sortedLogoMappings(kept), uploadedPaths: [], backups: new Map() }
+
+	const sourcePath = sourceLogoRefs[0].logoPath
+	const extension = extensionFromPath(sourcePath)
+	if (!extension) throw serviceError('invalid-logo-path', 'The original image has an unsupported format. Replace the image in the copy before saving.')
+	let bytes
+	try {
+		const downloaded = await getBytes(storageRef(storage, sourcePath))
+		bytes = new Blob([downloaded], { type: extension === 'webp' ? 'image/webp' : 'image/jpeg' })
+	} catch {
+		throw serviceError('logo-copy-failed', 'The original image could not be read to copy it. Retry or choose a new image.')
+	}
+	const uploaded = await uploadLogoMappings({ refs: added, code, blob: bytes, extension })
+	return {
+		logoRefs: sortedLogoMappings([...kept, ...uploaded.logoRefs]),
+		uploadedPaths: uploaded.uploadedPaths,
+		backups: uploaded.backups,
+	}
+}
+
+async function loadMasterCategory(id) {
+	if (typeof id !== 'string' || !id) throw serviceError('missing', 'The original Master Category could not be found.')
+	const snapshot = await getDoc(doc(collectionRef, id))
+	if (!snapshot.exists()) throw serviceError('missing', 'The original Master Category no longer exists.')
+	return normalizeMasterCategory(snapshot)
 }
 
 function logoFields(logoRefs) {
@@ -309,6 +375,14 @@ export async function createMasterCategory(values) {
 	const parentId = values.parentId || null
 	const refs = normalizeRefs(values.businessCategoryRefs ?? [])
 	const imageBlob = values.imageBlob || null
+	const copySource = values.copyFromId ? await loadMasterCategory(values.copyFromId) : null
+	const sourceLogoRefs = copySource && !imageBlob && !values.removeLogo ? currentLogoRefs(copySource) : []
+	if (copySource && !imageBlob && !values.removeLogo && !sourceLogoRefs.length && copySource.logoUrl) {
+		throw serviceError('legacy-logo-path', 'The original image has no Storage path. Choose a replacement image for the copy before saving.')
+	}
+	if (sourceLogoRefs.length && !refs.length) {
+		throw serviceError('logo-mapping-required', 'The copied image needs at least one Business Category mapping. Add a mapping or remove the image before saving.')
+	}
 	const parent = await resolveParent(parentId)
 	await validateNewRefs(refs)
 	if (await findDuplicateName(fields.name, parentId)) {
@@ -326,7 +400,9 @@ export async function createMasterCategory(values) {
 	if ((await getDoc(reference)).exists()) throw serviceError('duplicate-code', 'A Master Category with this code already exists.')
 	const uploadResult = imageBlob
 		? await uploadLogoMappings({ refs, code: fields.code, blob: imageBlob, extension: values.imageExtension })
-		: { logoRefs: [], uploadedPaths: [], backups: new Map() }
+		: sourceLogoRefs.length
+			? await copyLogoMappings({ refs, code: fields.code, sourceLogoRefs })
+			: { logoRefs: [], uploadedPaths: [], backups: new Map() }
 	try {
 		await runTransaction(db, async (transaction) => {
 			const existing = await transaction.get(reference)
@@ -369,10 +445,7 @@ export async function updateMasterCategory(id, values) {
 	const fields = validateFields({ ...values, code: current.code })
 	const parentId = values.parentId || null
 	const refs = normalizeRefs(values.businessCategoryRefs ?? [])
-	const oldLogoRefs = current.logoRefs.filter((item) => item?.logoPath)
-	if (current.logoPath && !oldLogoRefs.some((item) => item.logoPath === current.logoPath)) {
-		oldLogoRefs.push({ logoPath: current.logoPath, logoUrl: current.logoUrl || '' })
-	}
+	const oldLogoRefs = currentLogoRefs(current)
 	const parent = await resolveParent(parentId, id)
 	await validateNewRefs(refs, current.businessCategoryRefs)
 	if (await findDuplicateName(fields.name, parentId, id)) {
@@ -392,6 +465,9 @@ export async function updateMasterCategory(id, values) {
 
 	let uploadResult = { logoRefs: oldLogoRefs, uploadedPaths: [], backups: new Map() }
 	let imageFields = {}
+	const sharedPaths = values.removeLogo || (!values.imageBlob && !oldLogoRefs.length)
+		? new Set()
+		: await referencedLogoPaths(id)
 	if (values.removeLogo) {
 		uploadResult.logoRefs = []
 		imageFields = logoFields([])
@@ -402,6 +478,7 @@ export async function updateMasterCategory(id, values) {
 			blob: values.imageBlob,
 			extension: values.imageExtension,
 			existingLogoRefs: oldLogoRefs,
+			sharedPaths,
 		})
 		imageFields = logoFields(uploadResult.logoRefs)
 	} else if (oldLogoRefs.length) {
@@ -410,7 +487,7 @@ export async function updateMasterCategory(id, values) {
 		}
 		const extension = extensionFromPath(current.logoPath || oldLogoRefs[0].logoPath)
 		if (!extension) throw serviceError('invalid-logo-path', 'The current image path has an unsupported format. Replace the image before changing its mappings.')
-		uploadResult = await uploadLogoMappings({ refs, code: current.code, extension, existingLogoRefs: oldLogoRefs })
+		uploadResult = await uploadLogoMappings({ refs, code: current.code, extension, existingLogoRefs: oldLogoRefs, sharedPaths })
 		imageFields = logoFields(uploadResult.logoRefs)
 	} else if (current.logoUrl && refs.length) {
 		throw serviceError('legacy-logo-path', 'Replace this legacy image before assigning Business Category mappings so it can be stored under the required hierarchy.')

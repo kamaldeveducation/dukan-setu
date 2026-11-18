@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import MasterCategoryImageField from '../shared/components/image-field/ImageCropEditor.jsx'
+import { CopyIcon, EditIcon, PowerIcon } from '../shared/components/action-icons/ActionIcons.jsx'
+import { buildCopyName, buildUniqueCopyCode } from '../shared/copy/copyDefaults'
 import {
 	createMasterSubCategory,
 	generateMasterSubCategoryCode,
@@ -115,7 +117,8 @@ export default function AdminMasterSubCategories() {
 	))
 	const formParent = dialog ? parentById.get(form.parentId) : null
 	const editingSubCategory = dialog?.mode === 'edit' ? categories.find((category) => category.id === dialog.id) : null
-	const savedMappingKeys = new Set((editingSubCategory?.businessCategoryRefs || []).map((ref) => pairKey(ref.businessTypeId, ref.categoryId)))
+	const copySource = dialog?.mode === 'copy' ? categories.find((category) => category.id === dialog.id) : null
+	const savedMappingKeys = new Set((editingSubCategory || copySource)?.businessCategoryRefs?.map((ref) => pairKey(ref.businessTypeId, ref.categoryId)) || [])
 	const activeBusinessTypes = businessTypes.filter((type) => type.active === true)
 	const savedBusinessType = businessTypes.find((type) => type.id === formBusinessTypeId && type.active !== true
 		&& [...savedMappingKeys].some((key) => JSON.parse(key)[0] === type.id))
@@ -171,6 +174,24 @@ export default function AdminMasterSubCategories() {
 		setDialog({ mode: 'edit', id: category.id })
 	}
 
+	// The original record is never written; the copy is pre-filled from it and saved as a new document.
+	function openCopy(category) {
+		const originalCode = category.code || category.id
+		setForm({
+			name: buildCopyName(category.name),
+			code: buildUniqueCopyCode(originalCode, categories.map((item) => item.id)),
+			parentId: category.parentId || '',
+			businessCategoryRefs: category.businessCategoryRefs.map(({ businessTypeId, categoryId }) => ({ businessTypeId, categoryId })),
+			sortOrder: String(category.sortOrder ?? 0),
+			active: category.active === true,
+		})
+		setCodeEdited(true)
+		resetFormState()
+		setFormBusinessTypeId(category.businessCategoryRefs[0]?.businessTypeId || '')
+		setFormBusinessCategoryId(category.businessCategoryRefs[0]?.categoryId || '')
+		setDialog({ mode: 'copy', id: category.id })
+	}
+
 	function changeBusinessType(businessTypeId) {
 		setFormBusinessTypeId(businessTypeId)
 		setFormBusinessCategoryId('')
@@ -218,6 +239,7 @@ export default function AdminMasterSubCategories() {
 		setFormError('')
 		setUploadProgress(null)
 		try {
+			const keepsSourceImage = dialog.mode === 'copy' && copySource?.imagePath && !imageAsset && !removeImage
 			const values = {
 				name: form.name,
 				code: form.code,
@@ -228,6 +250,7 @@ export default function AdminMasterSubCategories() {
 				imageBlob: imageAsset?.blob || null,
 				imageExtension: imageAsset?.extension || '',
 				removeImage,
+				sourceImage: keepsSourceImage ? { imageUrl: copySource.imageUrl || '', imagePath: copySource.imagePath } : null,
 			}
 			if (dialog.mode === 'edit') {
 				const result = await updateMasterSubCategory(dialog.id, values, setUploadProgress)
@@ -236,7 +259,7 @@ export default function AdminMasterSubCategories() {
 					: { type: 'success', text: `${form.name.trim()} was updated.` })
 			} else {
 				await createMasterSubCategory(values, setUploadProgress)
-				setFeedback({ type: 'success', text: `${form.name.trim()} was added.` })
+				setFeedback({ type: 'success', text: dialog.mode === 'copy' ? `${form.name.trim()} was copied as a new Master Sub Category.` : `${form.name.trim()} was added.` })
 			}
 			setDialog(null)
 			setLoading(true)
@@ -289,12 +312,13 @@ export default function AdminMasterSubCategories() {
 	}
 
 	function actionButtons(category) {
+		const busy = busyId === category.id
+		const toggleLabel = category.active === true ? 'Deactivate' : 'Activate'
 		return (
-			<div className="store-actions">
-				<button className="store-btn" onClick={() => openEdit(category)} type="button">Edit</button>
-				<button className="store-btn" disabled={busyId === category.id} onClick={() => requestToggle(category)} type="button">
-					{busyId === category.id ? 'Saving...' : category.active === true ? 'Deactivate' : 'Activate'}
-				</button>
+			<div className="master-sub-subcategory-actions">
+				<button aria-label={`Edit ${category.name}`} className="master-sub-subcategory-icon-btn" onClick={() => openEdit(category)} title="Edit" type="button"><EditIcon /></button>
+				<button aria-label={`Copy ${category.name}`} className="master-sub-subcategory-icon-btn" onClick={() => openCopy(category)} title="Copy" type="button"><CopyIcon /></button>
+				<button aria-label={`${toggleLabel} ${category.name}`} className={`master-sub-subcategory-icon-btn ${category.active === true ? 'is-danger' : 'is-success'}`} disabled={busy} onClick={() => requestToggle(category)} title={busy ? 'Saving...' : toggleLabel} type="button"><PowerIcon /></button>
 			</div>
 		)
 	}
@@ -305,7 +329,7 @@ export default function AdminMasterSubCategories() {
 		{ label: 'Inactive Sub Categories', value: counts.inactive },
 		{ label: 'Without valid Business Category mappings', value: counts.unmapped },
 	]
-	const imageUrl = dialog?.mode === 'edit' ? categories.find((category) => category.id === dialog.id)?.imageUrl || '' : ''
+	const imageUrl = (editingSubCategory || copySource)?.imageUrl || ''
 
 	return (
 		<section className="admin-master-categories admin-master-subcategories" aria-labelledby="master-subcategories-title">
@@ -423,8 +447,9 @@ export default function AdminMasterSubCategories() {
 			{dialog && (
 				<div className="business-type-modal-backdrop" onClick={() => !saving && setDialog(null)} role="presentation">
 					<form aria-labelledby="master-subcategory-form-title" aria-modal="true" className="business-type-modal master-category-modal" onClick={(event) => event.stopPropagation()} onSubmit={submitForm} role="dialog">
-						<h2 id="master-subcategory-form-title">{dialog.mode === 'edit' ? 'Edit Master Sub Category' : 'Add Master Sub Category'}</h2>
+						<h2 id="master-subcategory-form-title">{dialog.mode === 'edit' ? 'Edit Master Sub Category' : dialog.mode === 'copy' ? 'Copy Master Sub Category' : 'Add Master Sub Category'}</h2>
 						{formError && <p className="store-feedback store-feedback-error" role="alert">{formError}</p>}
+						{copySource && <p className="master-subcategory-notice" role="status">Copying from {copySource.name} ({copySource.code || copySource.id}). The original record will not change.</p>}
 						{formNotice && <p className="master-subcategory-notice" role="status">{formNotice}</p>}
 
 						<MasterCategoryImageField
@@ -433,7 +458,7 @@ export default function AdminMasterSubCategories() {
 							imageAsset={imageAsset}
 							onChange={(asset) => { setImageAsset(asset); setRemoveImage(false) }}
 							onRemove={() => { setImageAsset(null); setRemoveImage(true) }}
-							savedUrl={imageUrl}
+							savedUrl={removeImage ? '' : imageUrl}
 							showCompressedInCropper
 							webpOnly
 						/>
@@ -483,7 +508,7 @@ export default function AdminMasterSubCategories() {
 
 						<div className="store-actions">
 							<button className="store-btn" disabled={saving} onClick={() => setDialog(null)} type="button">Cancel</button>
-							<button className="store-btn store-btn-approve" disabled={saving} type="submit">{saving ? uploadProgress === null ? 'Saving...' : `Uploading ${uploadProgress}%` : 'Save Subcategory'}</button>
+							<button className="store-btn store-btn-approve" disabled={saving} type="submit">{saving ? uploadProgress === null ? 'Saving...' : `Uploading ${uploadProgress}%` : dialog.mode === 'copy' ? 'Save Copy' : 'Save Subcategory'}</button>
 						</div>
 					</form>
 				</div>

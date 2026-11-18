@@ -34,6 +34,24 @@
 	outline: 3px solid rgb(82 114 103 / 15%);
 	border-color: #527267;
 }
+.master-sub-subcategory-actions { display: inline-flex; align-items: center; gap: 6px; }
+.master-sub-subcategory-icon-btn {
+	display: inline-grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid #cbd8c6;
+	border-radius: 6px;
+	color: #2f6b49;
+	background: #fff;
+	cursor: pointer;
+}
+.master-sub-subcategory-icon-btn:hover { background: #edf4ea; }
+.master-sub-subcategory-icon-btn:disabled { color: #89948b; cursor: not-allowed; opacity: 0.6; }
+.master-sub-subcategory-icon-btn.is-danger { color: #9b2c2c; }
+.master-sub-subcategory-icon-btn.is-success { color: #2f6b49; }
+.master-sub-subcategory-icon-btn:focus-visible { outline: 3px solid rgb(82 114 103 / 15%); border-color: #527267; }
 
 @media (max-width: 520px) {
 	.admin-master-sub-subcategories > .dashboard-heading { align-items: flex-start; flex-direction: column; }

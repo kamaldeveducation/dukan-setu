@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore'
 import { deleteObject, getBytes, getDownloadURL, ref as storageRef, uploadBytes, uploadBytesResumable } from 'firebase/storage'
 import { auth, db, storage } from '../firebase'
+import { versionedImagePath } from '../shared/copy/copyDefaults'
 import { getActiveBusinessCategory } from './businessCategoryService'
 import { getActiveBusinessType } from './businessTypeService'
 import { generateMasterCategoryCode, listMasterCategories } from './masterCategoryService'
@@ -129,7 +130,11 @@ async function findDuplicateName(name, parentId, excludingId = '') {
 }
 
 function imagePathFor(ref, parent, code) {
-	return `master_categories/${ref.businessTypeId}/${ref.categoryId}/${parent.id}/${code}/logo.webp`
+	return `${imageFolderFor(ref, parent)}${code}/logo.webp`
+}
+
+function imageFolderFor(ref, parent) {
+	return `master_categories/${ref.businessTypeId}/${ref.categoryId}/${parent.id}/`
 }
 
 function validateImage(blob, extension) {
@@ -161,12 +166,14 @@ async function rollbackImage(path, backup) {
 	}
 }
 
-async function uploadSubCategoryImage({ parent, refs, code, blob, existingPath, onProgress }) {
+// A copy reuses its original's Storage object, so replacing the original's image must not overwrite it.
+async function uploadSubCategoryImage({ parent, refs, code, blob, existingPath, sharedExisting, onProgress }) {
 	if (!refs.length) throw serviceError('image-mapping-required', 'Link at least one Business Category before adding an image.')
 	validateImage(blob, 'webp')
 	const orderedRefs = [...refs].sort((left, right) => left.businessTypeId.localeCompare(right.businessTypeId)
 		|| left.categoryId.localeCompare(right.categoryId))
-	const path = imagePathFor(orderedRefs[0], parent, code)
+	const canonicalPath = imagePathFor(orderedRefs[0], parent, code)
+	const path = sharedExisting && canonicalPath === existingPath ? versionedImagePath(canonicalPath) : canonicalPath
 	let backup = null
 	if (path === existingPath) {
 		try {
@@ -188,10 +195,14 @@ async function uploadSubCategoryImage({ parent, refs, code, blob, existingPath, 
 	}
 }
 
+async function imagePathInUse(path, excludingId = '') {
+	const snapshot = await getDocs(subCategoriesRef)
+	return snapshot.docs.some((item) => item.id !== excludingId && item.data().imagePath === path)
+}
+
 async function removeImageIfUnused(path) {
 	if (!path) return []
-	const snapshot = await getDocs(subCategoriesRef)
-	if (snapshot.docs.some((item) => item.data().imagePath === path)) return []
+	if (await imagePathInUse(path)) return []
 	try {
 		await deleteObject(storageRef(storage, path))
 		return []
@@ -233,6 +244,7 @@ export async function createMasterSubCategory(values, onProgress) {
 	const image = imageBlob
 		? await uploadSubCategoryImage({ parent, refs, code: fields.code, blob: imageBlob, onProgress })
 		: null
+	const sourceImage = !image && values.sourceImage?.imagePath ? values.sourceImage : null
 	try {
 		await runTransaction(db, async (transaction) => {
 			if ((await transaction.get(reference)).exists()) throw serviceError('duplicate-code', 'A Master Sub Category with this code already exists.')
@@ -250,6 +262,7 @@ export async function createMasterSubCategory(values, onProgress) {
 				updatedAt: timestamp,
 			}
 			if (image) Object.assign(data, { imageUrl: image.imageUrl, imagePath: image.imagePath })
+			else if (sourceImage) Object.assign(data, { imageUrl: sourceImage.imageUrl || '', imagePath: sourceImage.imagePath })
 			transaction.set(reference, data)
 		})
 	} catch (error) {
@@ -279,12 +292,14 @@ export async function updateMasterSubCategory(id, values, onProgress) {
 
 	let image = null
 	if (values.imageBlob) {
-		image = await uploadSubCategoryImage({ parent, refs, code: current.code, blob: values.imageBlob, existingPath: current.imagePath, onProgress })
+		const sharedExisting = Boolean(current.imagePath) && await imagePathInUse(current.imagePath, id)
+		image = await uploadSubCategoryImage({ parent, refs, code: current.code, blob: values.imageBlob, existingPath: current.imagePath, sharedExisting, onProgress })
 	} else if (values.removeImage) {
 		image = { imageUrl: '', imagePath: '', uploadedPath: '' }
 	} else if (current.imagePath) {
-		const validPaths = refs.map((ref) => imagePathFor(ref, parent, current.code))
-		if (!validPaths.includes(current.imagePath)) {
+		// Copies keep their original's image path, whose code segment can differ, so only the mapping folder must match.
+		const validFolders = refs.map((ref) => imageFolderFor(ref, parent))
+		if (!validFolders.some((folder) => current.imagePath.startsWith(folder))) {
 			throw serviceError('image-mapping-required', 'The current image is stored under one of its Business Category mappings. Keep that mapping, replace the image, or remove it before saving.')
 		}
 	}

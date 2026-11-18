@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import MasterCategoryImageField from '../shared/components/image-field/ImageCropEditor.jsx'
+import { CopyIcon, EditIcon, PowerIcon } from '../shared/components/action-icons/ActionIcons.jsx'
+import { buildCopyName, buildUniqueCopyCode } from '../shared/copy/copyDefaults'
 import {
   MAX_MASTER_CATEGORY_LEVEL,
   createMasterCategory,
@@ -137,6 +139,8 @@ export default function AdminMasterCategories() {
   }
 
   const editingId = dialog?.mode === 'edit' ? dialog.id : ''
+  const copySource = dialog?.mode === 'copy' ? categoryById.get(dialog.id) : null
+  const imageSourceRecord = copySource || (dialog?.mode === 'edit' ? categoryById.get(dialog.id) : null)
   const parentChoices = categories.filter((category) => (
     category.level < MAX_MASTER_CATEGORY_LEVEL && category.id !== editingId && !(editingId && isDescendantOf(category, editingId))
   ))
@@ -175,6 +179,25 @@ export default function AdminMasterCategories() {
     setRemoveImage(false)
     setMappingSearch('')
     setDialog({ mode: 'create' })
+    ensureOptions()
+  }
+
+  // The original record is never written; the copy is pre-filled from it and saved as a new document.
+  function openCopy(category) {
+    setForm({
+      name: buildCopyName(category.name),
+      code: buildUniqueCopyCode(category.code || category.id, categories.map((item) => item.id)),
+      parentId: category.parentId || '',
+      businessCategoryRefs: category.businessCategoryRefs.map(({ businessTypeId, categoryId }) => ({ businessTypeId, categoryId })),
+      sortOrder: String(category.sortOrder ?? 0),
+      active: category.active === true,
+    })
+    setCodeEdited(true)
+    setFormError('')
+    setImageAsset(null)
+    setRemoveImage(false)
+    setMappingSearch('')
+    setDialog({ mode: 'copy', id: category.id })
     ensureOptions()
   }
 
@@ -233,6 +256,7 @@ export default function AdminMasterCategories() {
         imageBlob: imageAsset?.blob || null,
         imageExtension: imageAsset?.extension || '',
         removeLogo: removeImage,
+        copyFromId: dialog.mode === 'copy' ? dialog.id : '',
       }
       if (dialog.mode === 'edit') {
         const result = await updateMasterCategory(dialog.id, values)
@@ -241,7 +265,7 @@ export default function AdminMasterCategories() {
           : { type: 'success', text: `${form.name.trim()} was updated.` })
       } else {
         await createMasterCategory(values)
-        setFeedback({ type: 'success', text: `${form.name.trim()} was added.` })
+        setFeedback({ type: 'success', text: `${form.name.trim()} was ${dialog.mode === 'copy' ? 'copied' : 'added'}.` })
       }
       setDialog(null)
       setLoading(true)
@@ -286,12 +310,14 @@ export default function AdminMasterCategories() {
   }
 
   function actionButtons(category) {
+    const busy = busyId === category.id
+    const isActive = category.active === true
+    const toggleLabel = isActive ? 'Deactivate' : 'Activate'
     return (
-      <div className="store-actions">
-        <button className="store-btn" onClick={() => openEdit(category)} type="button">Edit</button>
-        <button className="store-btn" disabled={busyId === category.id} onClick={() => requestToggle(category)} type="button">
-          {busyId === category.id ? 'Saving...' : category.active === true ? 'Deactivate' : 'Activate'}
-        </button>
+      <div className="master-sub-subcategory-actions">
+        <button aria-label={`Edit ${category.name}`} className="master-sub-subcategory-icon-btn" onClick={() => openEdit(category)} title="Edit" type="button"><EditIcon /></button>
+        <button aria-label={`Copy ${category.name}`} className="master-sub-subcategory-icon-btn" onClick={() => openCopy(category)} title="Copy" type="button"><CopyIcon /></button>
+        <button aria-label={`${toggleLabel} ${category.name}`} className={`master-sub-subcategory-icon-btn ${isActive ? 'is-danger' : 'is-success'}`} disabled={busy} onClick={() => requestToggle(category)} title={busy ? 'Saving...' : toggleLabel} type="button"><PowerIcon /></button>
       </div>
     )
   }
@@ -452,8 +478,9 @@ export default function AdminMasterCategories() {
       {dialog && (
         <div className="business-type-modal-backdrop" onClick={() => !saving && setDialog(null)} role="presentation">
           <form aria-labelledby="master-category-form-title" aria-modal="true" className="business-type-modal master-category-modal" onClick={(event) => event.stopPropagation()} onSubmit={submitForm} role="dialog">
-            <h2 id="master-category-form-title">{dialog.mode === 'edit' ? 'Edit Master Category' : 'Add Master Category'}</h2>
+            <h2 id="master-category-form-title">{dialog.mode === 'edit' ? 'Edit Master Category' : dialog.mode === 'copy' ? 'Copy Master Category' : 'Add Master Category'}</h2>
             {formError && <p className="store-feedback store-feedback-error" role="alert">{formError}</p>}
+            {copySource && <p className="master-category-notice" role="status">Copying from {copySource.name} ({copySource.code || copySource.id}). The original record will not change.</p>}
 
             <MasterCategoryImageField
               imageAsset={imageAsset}
@@ -465,9 +492,7 @@ export default function AdminMasterCategories() {
                 setImageAsset(null)
                 setRemoveImage(true)
               }}
-              savedUrl={dialog.mode === 'edit'
-                ? categoryById.get(dialog.id)?.logoUrl || categoryById.get(dialog.id)?.logoRefs?.[0]?.logoUrl || ''
-                : ''}
+              savedUrl={removeImage ? '' : (imageSourceRecord?.logoUrl || imageSourceRecord?.logoRefs?.[0]?.logoUrl || '')}
             />
 
             <label htmlFor="master-category-name">Category name</label>
@@ -502,22 +527,26 @@ export default function AdminMasterCategories() {
               value={form.code}
             />
 
-            <label htmlFor="master-category-parent">Parent category</label>
-            <select
-              disabled={dialog.mode === 'edit' && hasChildren(dialog.id)}
-              id="master-category-parent"
-              onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))}
-              value={form.parentId}
-            >
-              <option value="">None (top-level category)</option>
-              {parentChoices.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name} (Level {category.level}){category.active === true ? '' : ' - Inactive'}
-                </option>
-              ))}
-            </select>
-            {dialog.mode === 'edit' && hasChildren(dialog.id) && (
-              <small className="master-category-hint">This category has child categories, so its parent cannot be changed.</small>
+            {dialog.mode !== 'copy' && (
+              <>
+                <label htmlFor="master-category-parent">Parent category</label>
+                <select
+                  disabled={dialog.mode === 'edit' && hasChildren(dialog.id)}
+                  id="master-category-parent"
+                  onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))}
+                  value={form.parentId}
+                >
+                  <option value="">None (top-level category)</option>
+                  {parentChoices.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name} (Level {category.level}){category.active === true ? '' : ' - Inactive'}
+                    </option>
+                  ))}
+                </select>
+                {dialog.mode === 'edit' && hasChildren(dialog.id) && (
+                  <small className="master-category-hint">This category has child categories, so its parent cannot be changed.</small>
+                )}
+              </>
             )}
 
             <label htmlFor="master-category-mapping-search">Business Category mapping</label>
@@ -590,7 +619,7 @@ export default function AdminMasterCategories() {
 
             <div className="store-actions">
               <button className="store-btn" disabled={saving} onClick={() => setDialog(null)} type="button">Cancel</button>
-              <button className="store-btn store-btn-approve" disabled={saving} type="submit">{saving ? 'Saving...' : 'Save Category'}</button>
+              <button className="store-btn store-btn-approve" disabled={saving} type="submit">{saving ? 'Saving...' : dialog.mode === 'copy' ? 'Save Copy' : 'Save Category'}</button>
             </div>
           </form>
         </div>
